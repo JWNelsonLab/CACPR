@@ -1,0 +1,598 @@
+---
+title: "Dedifferentiation and Adaptation Figures"
+author: "Jonathan Nelson and Annie Lackey"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: bootstrap
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("BiocManager")) {install.packages("BiocManager"); require("BiocManager")}
+if (!require("tibble")) {install.packages("tibble"); require("tibble")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")} #color
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("kableExtra")) {install.packages("kableExtra"); require("kableExtra")} # for color brewer
+if (!require("corrplot")) {install.packages("corrplot"); require("corrplot")}
+if (!require("tidyr")) {install.packages("tidyr"); require("tidyr")}
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("gplots")) {install.packages("gplots"); require("gplots")}
+if (!require("geneName")) {install.packages("geneName"); require("geneName")}
+
+
+
+
+```
+
+
+# Load Datasets
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+rm(list = ls())
+
+All <- readRDS(here("Output", "All_integrated_Unique_Scores2.rds"))
+
+load(here("Code", "Dedifferentiation_merged_df2.RData"))
+
+```
+
+## Selecting Color Scheme
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+display.brewer.pal(9, "Dark2")
+brewer.pal(9, "Dark2")
+
+
+Dediff.color <- c("#1B9E77", "#D95F02", "#7570B3")
+
+Adapt.color <- c("#66A61E","#E6AB02","#E7298A")
+
+```
+
+# Dedifferentation Score
+
+## CACPR
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+merged_df <- merged_df_cacpr
+
+df2x <- merged_df %>%
+  group_by(subclass.All, class.sample.df1a, Dedifferentiation ) %>%
+  summarize(Count = n())
+
+# summarize as a percentage of the total number of cells in each subclass.All
+
+df2x <- df2x %>%
+  group_by(subclass.All, class.sample.df1a) %>%
+  mutate(Percentage = Count / sum(Count) * 100)
+
+df2x <- df2x %>%
+  filter(!grepl("PTinj", subclass.All))
+
+df_cacpr <- df2x %>%
+  filter(class.sample.df1a == "CACPR")
+
+df_cacpr_sham <- df2x %>%
+ filter(class.sample.df1a == "CACPR Sham")
+
+```
+
+
+### Sham Bargraph
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=16, fig.height=5}
+
+ggplot(df_cacpr_sham, aes(x = subclass.All, y = Count, fill = Dedifferentiation)) +
+  geom_bar(stat = "identity", position = "fill") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20, face = "bold"),
+        axis.text.x = element_text(angle = 45, hjust = 1, colour = "black"),
+        axis.text.y = element_text(colour = "black"),
+        axis.ticks = element_line(size = 1)) +
+    scale_fill_manual(values = Dediff.color) +
+  xlab("") +
+  ylab("Percentage of cells") +
+  theme(axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)))
+
+```
+
+### CACPR Bargraph
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=16, fig.height=5}
+
+ggplot(df_cacpr, aes(x = subclass.All, y = Count, fill = Dedifferentiation)) +
+  geom_bar(stat = "identity", position = "fill") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20, face = "bold"),
+        axis.text.x = element_text(angle = 45, hjust = 1, colour = "black"),
+        axis.text.y = element_text(colour = "black"),
+        axis.ticks = element_line(size = 1)) +
+    scale_fill_manual(values = Dediff.color) +
+  xlab("") +
+  ylab("Percentage of cells") +
+  theme(axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)))
+
+```
+
+### UMAP
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+SO2 <- subset(All, idents = c("CACPR Sham", "IRI Sham", "CACPR", "IRI"), downsample = 5524)
+
+head(SO2@meta.data)
+
+Idents(SO2) <- SO2@meta.data$subclass.All
+
+SO2 <- subset(SO2, idents = c("PTinj"), invert = TRUE)
+
+Idents(SO2) <- SO2@meta.data$class.sample
+
+SO2 <- subset(SO2, idents = c("CACPR Sham", "CACPR"))
+
+DimPlot(SO2, group.by = "Dedifferentiation", split.by = "class.sample", cols = Dediff.color) & xlab("UMAP 1") & ylab("UMAP 2") +
+  theme_classic() &
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20),
+         legend.position = "none") 
+
+```
+
+## IRI
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+merged_df <- merged_df_iri
+
+df2x <- merged_df %>%
+  group_by(subclass.All, class.sample.df1a, Dedifferentiation ) %>%
+  summarize(Count = n())
+
+# summarize as a percentage of the total number of cells in each subclass.All
+
+df2x <- df2x %>%
+  group_by(subclass.All, class.sample.df1a) %>%
+  mutate(Percentage = Count / sum(Count) * 100)
+
+df2x <- df2x %>%
+  filter(!grepl("PTinj", subclass.All))
+
+df_iri <- df2x %>%
+  filter(class.sample.df1a == "IRI")
+
+df_iri_sham <- df2x %>%
+ filter(class.sample.df1a == "IRI Sham")
+
+```
+
+### Sham Bargraph
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=16, fig.height=5}
+
+ggplot(df_iri_sham, aes(x = subclass.All, y = Count, fill = Dedifferentiation)) +
+  geom_bar(stat = "identity", position = "fill") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20, face = "bold"),
+        axis.text.x = element_text(angle = 45, hjust = 1, colour = "black"),
+        axis.text.y = element_text(colour = "black"),
+        axis.ticks = element_line(size = 1)) +
+    scale_fill_manual(values = Dediff.color) +
+  xlab("") +
+  ylab("Percentage of cells") +
+  theme(axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)))
+
+```
+
+### IRI Bargraph
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=16, fig.height=5}
+
+ggplot(df_iri, aes(x = subclass.All, y = Count, fill = Dedifferentiation)) +
+  geom_bar(stat = "identity", position = "fill") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20, face = "bold"),
+        axis.text.x = element_text(angle = 45, hjust = 1, colour = "black"),
+        axis.text.y = element_text(colour = "black"),
+        axis.ticks = element_line(size = 1)) +
+    scale_fill_manual(values = Dediff.color) +
+  xlab("") +
+  ylab("Percentage of cells") +
+  theme(axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)))
+
+```
+
+### UMAP
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+SO2 <- subset(All, idents = c("CACPR Sham", "IRI Sham", "CACPR", "IRI"), downsample = 5524)
+
+head(SO2@meta.data)
+
+Idents(SO2) <- SO2@meta.data$subclass.All
+
+SO2 <- subset(SO2, idents = c("PTinj"), invert = TRUE)
+
+Idents(SO2) <- SO2@meta.data$class.sample
+
+SO2 <- subset(SO2, idents = c("IRI Sham", "IRI"))
+
+DimPlot(SO2, group.by = "Dedifferentiation", split.by = "class.sample", cols = Dediff.color) & xlab("UMAP 1") & ylab("UMAP 2") +
+  theme_classic() &
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20),
+         legend.position = "none") 
+
+```
+
+# Adaptation Score
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+load(here("Code", "Adaptation_merged_df2.RData"))
+
+```
+
+## CACPR
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+merged_df <- merged_df_cacpr
+
+df2x <- merged_df %>%
+  group_by(subclass.All, class.sample.df1a, Adaptation ) %>%
+  summarize(Count = n())
+
+# summarize as a percentage of the total number of cells in each subclass.All
+
+df2x <- df2x %>%
+  group_by(subclass.All, class.sample.df1a) %>%
+  mutate(Percentage = Count / sum(Count) * 100)
+
+df2x <- df2x %>%
+  filter(!grepl("PTinj", subclass.All))
+
+df_cacpr <- df2x %>%
+  filter(class.sample.df1a == "CACPR")
+
+df_cacpr_sham <- df2x %>%
+ filter(class.sample.df1a == "CACPR Sham")
+
+```
+
+
+### Sham Bargraph
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=16, fig.height=5}
+
+ggplot(df_cacpr_sham, aes(x = subclass.All, y = Count, fill = Adaptation)) +
+  geom_bar(stat = "identity", position = "fill") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20, face = "bold"),
+        axis.text.x = element_text(angle = 45, hjust = 1, colour = "black"),
+        axis.text.y = element_text(colour = "black"),
+        axis.ticks = element_line(size = 1)) +
+    scale_fill_manual(values = Adapt.color) +
+  xlab("") +
+  ylab("Percentage of cells") +
+  theme(axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)))
+
+```
+
+### CACPR Bargraph
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=16, fig.height=5}
+
+ggplot(df_cacpr, aes(x = subclass.All, y = Count, fill = Adaptation)) +
+  geom_bar(stat = "identity", position = "fill") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20, face = "bold"),
+        axis.text.x = element_text(angle = 45, hjust = 1, colour = "black"),
+        axis.text.y = element_text(colour = "black"),
+        axis.ticks = element_line(size = 1)) +
+    scale_fill_manual(values = Adapt.color) +
+  xlab("") +
+  ylab("Percentage of cells") +
+  theme(axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)))
+
+```
+
+### UMAP
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+SO2 <- subset(All, idents = c("CACPR Sham", "IRI Sham", "CACPR", "IRI"), downsample = 5524)
+
+head(SO2@meta.data)
+
+Idents(SO2) <- SO2@meta.data$subclass.All
+
+SO2 <- subset(SO2, idents = c("PTinj"), invert = TRUE)
+
+Idents(SO2) <- SO2@meta.data$class.sample
+
+SO2 <- subset(SO2, idents = c("CACPR Sham", "CACPR"))
+
+DimPlot(SO2, group.by = "Adaptation", split.by = "class.sample", cols = Adapt.color) & xlab("UMAP 1") & ylab("UMAP 2") +
+  theme_classic() &
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20),
+         legend.position = "none") 
+
+```
+
+## IRI
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+merged_df <- merged_df_iri
+
+df2x <- merged_df %>%
+  group_by(subclass.All, class.sample.df1a, Adaptation ) %>%
+  summarize(Count = n())
+
+# summarize as a percentage of the total number of cells in each subclass.All
+
+df2x <- df2x %>%
+  group_by(subclass.All, class.sample.df1a) %>%
+  mutate(Percentage = Count / sum(Count) * 100)
+
+df2x <- df2x %>%
+  filter(!grepl("PTinj", subclass.All))
+
+df_iri <- df2x %>%
+  filter(class.sample.df1a == "IRI")
+
+df_iri_sham <- df2x %>%
+ filter(class.sample.df1a == "IRI Sham")
+
+```
+
+### Sham Bargraph
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=16, fig.height=5}
+
+ggplot(df_iri_sham, aes(x = subclass.All, y = Count, fill = Adaptation)) +
+  geom_bar(stat = "identity", position = "fill") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20, face = "bold"),
+        axis.text.x = element_text(angle = 45, hjust = 1, colour = "black"),
+        axis.text.y = element_text(colour = "black"),
+        axis.ticks = element_line(size = 1)) +
+    scale_fill_manual(values = Adapt.color) +
+  xlab("") +
+  ylab("Percentage of cells") +
+  theme(axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)))
+
+```
+
+### IRI Bargraph
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=16, fig.height=5}
+
+ggplot(df_iri, aes(x = subclass.All, y = Count, fill = Adaptation)) +
+  geom_bar(stat = "identity", position = "fill") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20, face = "bold"),
+        axis.text.x = element_text(angle = 45, hjust = 1, colour = "black"),
+        axis.text.y = element_text(colour = "black"),
+        axis.ticks = element_line(size = 1)) +
+    scale_fill_manual(values = Adapt.color) +
+  xlab("") +
+  ylab("Percentage of cells") +
+  theme(axis.title.y = element_text(margin = margin(t = 0, r = 15, b = 0, l = 0)))
+
+```
+
+### UMAP
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+SO2 <- subset(All, idents = c("CACPR Sham", "IRI Sham", "CACPR", "IRI"), downsample = 5524)
+
+head(SO2@meta.data)
+
+Idents(SO2) <- SO2@meta.data$subclass.All
+
+SO2 <- subset(SO2, idents = c("PTinj"), invert = TRUE)
+
+Idents(SO2) <- SO2@meta.data$class.sample
+
+SO2 <- subset(SO2, idents = c("IRI Sham", "IRI"))
+
+DimPlot(SO2, group.by = "Adaptation", split.by = "class.sample", cols = Adapt.color) & xlab("UMAP 1") & ylab("UMAP 2") +
+  theme_classic() &
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20),
+         legend.position = "none") 
+
+```
+# Correlating with Sodium Pump
+
+## Correlating with Atp1a1
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=14, fig.height=6}
+
+
+custom_colors <- c(
+  "CACPR Sham" = "#4974A5",
+  "CACPR" = "#B81316",
+  "IRI Sham" = "#45B4A6",
+  "IRI" = "#B755B6"
+)
+
+All <- readRDS(here("Output", "All_integrated.rds"))
+
+All@meta.data$class.sample <- factor(All@meta.data$class.sample, levels = c("CACPR Sham", "CACPR", "IRI Sham", "IRI"))
+
+Idents(All) <- All@meta.data$class.sample
+All
+
+All2 <- subset(All, idents = c("CACPR Sham", "IRI Sham", "CACPR", "IRI"), downsample = 5524)
+All2 
+
+
+Idents(All) <- All@meta.data$subclass.All
+
+Idents(All) <- All@meta.data$class.sample
+
+VlnPlot(All, "Atp1a1", group.by = "subclass.All", split.by = "class.sample", idents = c("CACPR Sham", "CACPR"), pt.size = 0.1) +
+  theme_classic() +
+  theme(
+    axis.line = element_line(size = 1, colour = "black"),
+    text = element_text(size = 20),
+    axis.text.x = element_text(angle = 45, hjust = 1, colour = "black"),
+    plot.title = element_text(hjust = 0.5),
+    axis.title.x = element_blank(),
+    ) +
+  ylab("Expression of Atp1a1") +
+  scale_fill_manual(values = custom_colors) +
+  ggtitle("Expression of Atp1a1 at Baseline and After CA/CPR")
+
+
+
+```
+
+## Correlation Plot
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=14, fig.height=6}
+
+load(here("Code","merged_df_norm_delta_cacpr_final_1.RData"))
+
+```
+
+
+#### Run correlation test
+
+##### Dedifferentiation
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE, fig.width= 20, fig.align = 'center'}
+
+# dediff
+cor_result_dediff_cacpr <- cor.test(merged_df_norm_delta_cacpr_final_1$norm_delta_Atp1a1, merged_df_norm_delta_cacpr_final_1$Percent_Dediff, method = "spearman")
+cor_result_dediff_cacpr
+```
+
+#### Visualize correlation
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE, fig.width= 15, fig.height = 8, fig.align = 'center'}
+
+#dediff
+corr_coeff_d_cacpr <- cor_result_dediff_cacpr$estimate
+corr_pvalue_d_cacpr <- cor_result_dediff_cacpr$p.value
+
+ggplot(merged_df_norm_delta_cacpr_final_1, aes(x = norm_delta_Atp1a1, y = Percent_Dediff)) +
+  geom_point(size = 5) +
+  theme_classic() +
+  theme(axis.line = element_line(size = 2, colour = "black"),
+        text = element_text(size=30)) +
+   labs(
+    x = "Normalized Change in Atp1a1 expression",
+    y = "High and Medium Dedifferentiation",
+    title = ""
+  ) +
+    geom_text_repel(aes(label = subclass.All), vjust = -0.5, size = 7)
+
+```
+
+### Atp1b1
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE, fig.width= 15, fig.height = 8, fig.align = 'center'}
+
+VlnPlot(All, "Atp1b1", group.by = "subclass.All", split.by = "class.sample", idents = c("CACPR Sham", "CACPR"), pt.size = 0.1) +
+  theme_classic() +
+  theme(
+    axis.line = element_line(size = 1, colour = "black"),
+    text = element_text(size = 20),
+    axis.text.x = element_text(angle = 45, hjust = 1, colour = "black"),
+    plot.title = element_text(hjust = 0.5),
+    axis.title.x = element_blank(),
+    ) +
+  ylab("Expression of Atp1a1") +
+  scale_fill_manual(values = custom_colors) +
+  ggtitle("Expression of Atp1b1 at Baseline and After CA/CPR")
+
+```
+
+
+#### Run correlation test
+
+##### Dedifferentiation
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE, fig.width= 20, fig.align = 'center'}
+
+# dediff
+cor_result_dediff_cacpr_2 <- cor.test(merged_df_norm_delta_cacpr_final_1$norm_delta_Atp1b1, merged_df_norm_delta_cacpr_final_1$Percent_Dediff, method = "spearman")
+cor_result_dediff_cacpr_2
+```
+
+#### Visualize correlation
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE, fig.width= 15, fig.height = 8, fig.align = 'center'}
+
+#dediff
+corr_coeff_d_cacpr_1b1 <- cor_result_dediff_cacpr_2$estimate
+corr_pvalue_d_cacpr_1b1 <- cor_result_dediff_cacpr_2$p.value
+
+ggplot(merged_df_norm_delta_cacpr_final_1, aes(x = norm_delta_Atp1b1, y = Percent_Dediff)) +
+  geom_point(size = 5) +
+  theme_classic() +
+  theme(axis.line = element_line(size = 2, colour = "black"),
+        text = element_text(size=30)) +
+   labs(
+    x = "Normalized Change in Atp1b1 expression",
+    y = "High and Medium Dedifferentiation",
+    title = ""
+  ) +
+    geom_text_repel(aes(label = subclass.All), vjust = -0.5, size = 7)
+```
+
+
+# Session Info
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+sessionInfo()
+
+```
+
+
+  

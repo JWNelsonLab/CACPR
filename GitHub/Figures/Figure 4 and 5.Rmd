@@ -1,0 +1,925 @@
+---
+title: "Figure 4 and 5"
+author: "Jonathan Nelson and Annie Lackey"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: bootstrap
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("BiocManager")) {install.packages("BiocManager"); require("BiocManager")}
+if (!require("tibble")) {install.packages("tibble"); require("tibble")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")} #color
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("kableExtra")) {install.packages("kableExtra"); require("kableExtra")} # for color brewer
+if (!require("corrplot")) {install.packages("corrplot"); require("corrplot")}
+if (!require("tidyr")) {install.packages("tidyr"); require("tidyr")}
+
+```
+
+
+# Load All Dataset
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+rm(list = ls())
+
+All <- readRDS(here("Output", "All_integrated.rds"))
+DefaultAssay(All) <- "RNA"
+
+head(All@meta.data)
+
+Idents(All) <- All@meta.data$subclass.All
+
+DimPlot(All, reduction = "umap")
+
+DimPlot(All, group.by = "class.sample", cols = c("#4974A5", "#B81316", "#45B4A6", "#B755B6"))
+
+DimPlot(All, split.by = "class.sample", label = TRUE)
+
+table(Idents(All))
+prop.table(table(Idents(All)))
+
+SO <- All
+
+SO@meta.data$class.sample <- factor(SO@meta.data$class.sample, levels = c("CACPR Sham", "CACPR", "IRI Sham", "IRI"))
+
+SO@meta.data$subclass.All <- factor(SO@meta.data$subclass.All, levels = c("PTS1", "PTS2", "PTS3", "PTinj", "DTL", "TAL1", "TAL2", "DCT1", "DCT2", "CNT", "PC", "ICA", "ICB", "URO", "PEC", "FIB", "MES", "PODO", "EC", "IMMUNE"))
+
+```
+
+# Set the color palette
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+custom_colors <- c(
+  "CACPR Sham" = "#4974A5",
+  "CACPR" = "#B81316",
+  "IRI Sham" = "#45B4A6",
+  "IRI" = "#B755B6"
+)
+
+```
+
+
+
+# Fig 4
+
+## Fig 4a
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=10, fig.height=8}
+
+DimPlot(SO, reduction = "umap", pt.size = 1) + ggtitle(NULL) + xlab("UMAP 1") + ylab("UMAP 2") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20))
+
+
+```
+
+## Fig 4b 
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=16, fig.height=10}
+
+markers.to.plot1 <- c("Lrp2",         # PT
+                      "Slc5a12",      # PT-S1
+                      "Slc13a3",      # PT-S2
+                      "Slc16a9",      # PT-S3
+                      "Havcr1",       # Injured PT
+                      "Epha7",        # dTL
+                      "Slc12a1",      # TAL
+                      "Cldn10",       # TAL
+                      "Cldn16",       # TAL
+                      "Slc12a3",      # DCT
+                      "Pvalb",        # DCT1
+                      "Slc8a1",       # DCT2, CNT
+                      "Aqp2",         # PC
+                      "Slc4a1",       # IC-A
+                      "Slc26a4",      # IC-B
+                      "Upk1b",        # Uro
+                      "Ncam1",        # PEC
+                      "Pdgfrb",       # Perivascular
+                      "Piezo2",       # Mesangial
+                      "Pdgfra",       # Fib
+                      "Acta2",        # Mural
+                      "Nphs1",        # Podo
+                      "Kdr",          # Capillary Endo
+                      "Ptprc"        # Immune
+                      )
+
+
+DotPlot(SO,
+features = markers.to.plot1,
+dot.scale = 8,
+dot.min = 0,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5) +
+  coord_flip() +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        axis.ticks.x = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        text = element_text(size=20),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  xlab(NULL) +
+  ylab(NULL)
+
+
+```
+
+# Supplemental Fig 3
+
+## Fig S3a
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+SO@meta.data$class.lab <- factor(SO@meta.data$class.lab , levels = c("Hutchens", "Humphreys"))
+
+VlnPlot(SO, "nFeature_RNA", split.by = "class.sample", group.by = "class.lab", pt.size = 0.1) +
+  theme_classic() +
+  theme(
+    axis.line = element_line(size = 1, colour = "black"),
+    text = element_text(size = 20),
+    plot.title = element_text(hjust = 0.5),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  ) +
+  ylab("Number of Genes Detected") +
+  scale_fill_manual(values = custom_colors) +
+  ggtitle("nFeature RNA")
+
+
+```
+
+## Fig S3b
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+VlnPlot(SO, "nCount_RNA", split.by = "class.sample", group.by = "class.lab", pt.size = 0.1) +
+    theme_classic() +
+  theme(
+    axis.line = element_line(size = 1, colour = "black"),
+    text = element_text(size = 20),
+    plot.title = element_text(hjust = 0.5),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  ) +
+  ylab("Number of mRNA Molecules Detected") +
+  scale_fill_manual(values = custom_colors) +
+  ggtitle("nCount RNA")
+
+
+table(SO@meta.data$class.sample)
+
+df <- FetchData(object = SO, vars = c("class.sample", "class.lab", "nFeature_RNA", "nCount_RNA"), layer = "counts")
+
+df2 <- df %>%
+  group_by(class.sample) %>%
+  summarize(
+    Count = n(),
+    "Median nFeature_RNA" = median(nFeature_RNA, na.rm = TRUE),
+    "Median nCount_RNA" = median(nCount_RNA, na.rm = TRUE)
+  ) %>%
+  as.data.frame()
+
+df2
+
+df3 <- df %>%
+  group_by(class.lab) %>%
+  summarize(
+    Count = n(),
+    "Median nFeature_RNA" = median(nFeature_RNA, na.rm = TRUE),
+    "Median nCount_RNA" = median(nCount_RNA, na.rm = TRUE)
+  ) %>%
+  as.data.frame()
+
+df3
+
+
+```
+
+## Fig S2c
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=30, fig.height=20}
+
+f5 <- FeaturePlot(SO,
+             features = markers.to.plot1,
+             cols = c("lightgrey", "royal blue"),
+             combine = F, 
+             order = T) 
+
+for(i in 1:length(f5)) {
+  f5[[i]] <- f5[[i]] & xlab("UMAP 1") & ylab("UMAP 2") +
+  theme_classic() &
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20))
+}
+
+cowplot::plot_grid(plotlist = f5)
+
+```
+
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=12, fig.height=8}
+
+DimPlot(SO, reduction = "umap", pt.size = 1, label = TRUE, label.size = 6, repel = TRUE) + ggtitle(NULL) & xlab("UMAP 1") & ylab("UMAP 2") +
+  theme_classic() &
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20))
+
+```
+
+
+## Fig 4c
+
+### All Nuclei
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=20, fig.height=6}
+
+Idents(SO) <- SO@meta.data$subclass.All
+
+DimPlot(SO, reduction = "umap", split.by = "class.sample", pt.size = 1) & xlab("UMAP 1") & ylab("UMAP 2") +
+  theme_classic() &
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20),
+         legend.position = "none")
+
+
+```
+
+### Downsampled to have equal numbers of nuclei
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=16, fig.height=6}
+
+Idents(SO) <- SO@meta.data$class.sample
+SO
+
+SO2 <- subset(SO, idents = c("CACPR Sham", "IRI Sham", "CACPR", "IRI"), downsample = 5524)
+SO2 
+
+Idents(SO2) <- SO2@meta.data$subclass.All
+
+DimPlot(SO2, reduction = "umap", split.by = "class.sample", pt.size = 1) & xlab("UMAP 1") & ylab("UMAP 2") + theme_classic() &
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20),
+         legend.position = "none")
+
+
+```
+
+# Supplemental Fig 4
+
+## Supplemental 4a
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=10, fig.height=8}
+
+DimPlot(SO2, reduction = "umap", pt.size = 1, group.by = "class.sample", cols = c("#4974A5", "#B81316", "#45B4A6", "#B755B6")) & xlab("UMAP 1") & ylab("UMAP 2") + theme_classic() &
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20))
+
+```
+
+
+
+## Supplemental 4b: Proportion by "subclass"
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width = 8}
+
+t1 <- table(SO@meta.data$subclass.All, SO@meta.data$class.sample)[, c("CACPR Sham", "CACPR", "IRI Sham", "IRI")]
+t1
+
+prop.t1 <- prop.table(t1, margin = 2) 
+prop.t1
+
+t2 <- as.data.frame(t1)
+colnames(t2) <- c('Cell_type', 'Experimental_Group', 'Frequency')
+
+# Original plot
+
+ggplot(t2, aes(fill=Cell_type, y=Frequency, x=Experimental_Group)) + 
+  geom_bar(position="fill", stat = "identity", fun.y = "mean", colour="black") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        #axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        text = element_text(size=20)) +
+  labs(fill = "Cell Type") +
+  xlab(NULL)
+
+```
+
+## Supplemental 4c: Proportion by "class"
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width = 8}
+
+t1 <- table(SO@meta.data$class.All, SO@meta.data$class.sample)[, c("CACPR Sham", "CACPR", "IRI Sham", "IRI")]
+t1
+
+prop.t1 <- prop.table(t1, margin = 2) 
+prop.t1
+
+t2 <- as.data.frame(t1)
+colnames(t2) <- c('Cell_type', 'Experimental_Group', 'Frequency')
+
+# Original plot
+
+ggplot(t2, aes(fill=Cell_type, y=Frequency, x=Experimental_Group)) + 
+  geom_bar(position="fill", stat = "identity", fun.y = "mean", colour="black") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        #axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        text = element_text(size=20)) +
+  labs(fill = "Cell Type") +
+  xlab(NULL)
+
+```
+
+## Supplemental 4d: Proportion by "type"
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width = 8}
+
+t1 <- table(SO@meta.data$type.All, SO@meta.data$class.sample)[, c("CACPR Sham", "CACPR", "IRI Sham", "IRI")]
+t1
+
+prop.t1 <- prop.table(t1, margin = 2) 
+prop.t1
+
+t2 <- as.data.frame(t1)
+colnames(t2) <- c('Cell_type', 'Experimental_Group', 'Frequency')
+
+# Original plot
+
+ggplot(t2, aes(fill=Cell_type, y=Frequency, x=Experimental_Group)) + 
+  geom_bar(position="fill", stat = "identity", fun.y = "mean", colour="black") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        #axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        text = element_text(size=20)) +
+  labs(fill = "Cell Type") +
+  xlab(NULL)
+
+```
+
+
+## Supplemental 4e: DEG numbers by CACPR
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+rm(list = ls())
+
+load(here("Output", "CACPR_All_Condition_DEGs.RData"))
+
+# List the objects in the environment
+  objects_in_environment <- ls()
+
+data_frames <- Filter(is.data.frame, mget(ls()))
+
+# Initialize an empty data frame to store the results
+output_table <- data.frame(Data_Frame = character(),
+                           Number_of_Obs = numeric(),
+                           Number_of_Positive_Log2FC = numeric(),
+                           Number_of_Negative_Log2FC = numeric(),
+                           stringsAsFactors = FALSE)
+
+# Loop through each data frame
+for (df_name in names(data_frames)) {
+  df <- data_frames[[df_name]]
+  
+  # Get the number of observations in the data frame
+  num_obs <- nrow(df)
+  
+  # Count the number of observations with positive log2FC
+  positive_count <- sum(df$avg_log2FC > 0)
+  
+  # Count the number of observations with negative log2FC
+  negative_count <- sum(df$avg_log2FC < 0)
+  
+  # Create a row in the output table
+  output_row <- data.frame(Data_Frame = df_name,
+                           Number_of_Obs = num_obs,
+                           Number_of_Positive_Log2FC = positive_count,
+                           Number_of_Negative_Log2FC = negative_count,
+                           stringsAsFactors = FALSE)
+  
+  # Append the row to the output table
+  output_table <- rbind(output_table, output_row)
+}
+
+# Print the output table
+output_table
+
+```
+
+### Print Graph of DEGs
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.height=6, fig.width=10}
+
+# Measure the total number of DEGs (sum of output_table$Number_of_Obs)
+v1 <-sum(output_table$Number_of_Obs)
+print("Total Number of DEGs")
+print(v1)
+
+output_table2 <- output_table %>% 
+                 mutate(Data_Frame = str_replace_all(Data_Frame, "CACPR_All_", "")) %>%
+                 arrange(desc(Number_of_Obs)) %>%
+                 mutate(Data_Frame = factor(Data_Frame, levels = unique(Data_Frame)))
+                
+
+
+
+
+p1 <- ggplot(output_table2, aes(x = Data_Frame)) +
+  geom_bar(aes(y = Number_of_Positive_Log2FC), stat = "identity", fill = "coral2") +
+  geom_bar(aes(y = -Number_of_Negative_Log2FC), stat = "identity", fill = "dodgerblue2") +
+  labs(x = "Cell Type", y = "Number of DEGs") +
+  ggtitle("CACPR Cell Type DEGs") +
+  scale_y_continuous(labels = function(x) abs(x)) +
+  annotate("text", x = Inf, y = Inf, label = "Positive Log2FC", color = "coral2",
+           hjust = 1, vjust = 1, size = 8) +
+  annotate("text", x = Inf, y = Inf, label = "Negative Log2FC", color = "dodgerblue2",
+           hjust = 1, vjust = 2.1, size = 8) +
+  theme_minimal() + 
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        plot.title = element_text(hjust = 0.5, size = 24),
+        axis.text = element_text(color = "black", size = 14,),
+        axis.text.x = element_text(color = "black", size = 14, angle = 45, hjust = 1, vjust = 1),
+        axis.title = element_text(color = "black", size = 20,))
+
+p1
+
+#rm(list = ls())
+```
+
+
+## Supplemental 4e: DEG numbers by IRI
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+rm(list = ls())
+
+load(here("Output", "IRI_All_Condition_DEGs.RData"))
+
+# List the objects in the environment
+  objects_in_environment <- ls()
+
+data_frames <- Filter(is.data.frame, mget(ls()))
+
+# Initialize an empty data frame to store the results
+output_table <- data.frame(Data_Frame = character(),
+                           Number_of_Obs = numeric(),
+                           Number_of_Positive_Log2FC = numeric(),
+                           Number_of_Negative_Log2FC = numeric(),
+                           stringsAsFactors = FALSE)
+
+# Loop through each data frame
+for (df_name in names(data_frames)) {
+  df <- data_frames[[df_name]]
+  
+  # Get the number of observations in the data frame
+  num_obs <- nrow(df)
+  
+  # Count the number of observations with positive log2FC
+  positive_count <- sum(df$avg_log2FC > 0)
+  
+  # Count the number of observations with negative log2FC
+  negative_count <- sum(df$avg_log2FC < 0)
+  
+  # Create a row in the output table
+  output_row <- data.frame(Data_Frame = df_name,
+                           Number_of_Obs = num_obs,
+                           Number_of_Positive_Log2FC = positive_count,
+                           Number_of_Negative_Log2FC = negative_count,
+                           stringsAsFactors = FALSE)
+  
+  # Append the row to the output table
+  output_table <- rbind(output_table, output_row)
+}
+
+# Print the output table
+output_table
+
+```
+
+### Print Graph of DEGs
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.height=6, fig.width=10}
+
+# Measure the total number of DEGs (sum of output_table$Number_of_Obs)
+v1 <-sum(output_table$Number_of_Obs)
+print("Total Number of DEGs")
+print(v1)
+
+output_table2 <- output_table %>% 
+                 mutate(Data_Frame = str_replace_all(Data_Frame, "IRI_All_", "")) %>%
+                 arrange(desc(Number_of_Obs)) %>%
+                 mutate(Data_Frame = factor(Data_Frame, levels = unique(Data_Frame)))
+                
+
+
+
+
+p1 <- ggplot(output_table2, aes(x = Data_Frame)) +
+  geom_bar(aes(y = Number_of_Positive_Log2FC), stat = "identity", fill = "coral2") +
+  geom_bar(aes(y = -Number_of_Negative_Log2FC), stat = "identity", fill = "dodgerblue2") +
+  labs(x = "Cell Type", y = "Number of DEGs") +
+  ggtitle("IRI Cell Type DEGs") +
+  scale_y_continuous(labels = function(x) abs(x)) +
+  annotate("text", x = Inf, y = Inf, label = "Positive Log2FC", color = "coral2",
+           hjust = 1, vjust = 1, size = 8) +
+  annotate("text", x = Inf, y = Inf, label = "Negative Log2FC", color = "dodgerblue2",
+           hjust = 1, vjust = 2.1, size = 8) +
+  theme_minimal() + 
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        plot.title = element_text(hjust = 0.5, size = 24),
+        axis.text = element_text(color = "black", size = 14,),
+        axis.text.x = element_text(color = "black", size = 14, angle = 45, hjust = 1, vjust = 1),
+        axis.title = element_text(color = "black", size = 20,))
+
+p1
+
+rm(list = ls())
+```
+
+## Fig 4d
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=16, fig.height=6}
+
+
+All <- readRDS(here("Output", "All_integrated.rds"))
+DefaultAssay(All) <- "RNA"
+SO <- All
+Idents(SO) <- SO@meta.data$class.sample
+SO
+
+SO2 <- subset(SO, idents = c("CACPR Sham", "IRI Sham", "CACPR", "IRI"), downsample = 5524)
+
+
+FeaturePlot(SO2, "Havcr1", split.by = "class.sample", pt.size = 1, order = TRUE) & xlab("UMAP 1") & ylab("UMAP 2") +
+  theme_classic() &
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20),
+         legend.position = "none")
+
+
+```
+
+## Fig 4f
+
+### Set the color palette
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+custom_colors <- c(
+  "CACPR Sham" = "#4974A5",
+  "CACPR" = "#B81316",
+  "IRI Sham" = "#45B4A6",
+  "IRI" = "#B755B6"
+)
+
+```
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE,  fig.width=6, fig.height=6}
+
+Idents(SO) <- "class.All"
+
+SO@meta.data$class.sample <- factor(SO@meta.data$class.sample, levels = c("CACPR Sham", "CACPR", "IRI Sham", "IRI"))
+
+VlnPlot(SO, features = "Havcr1", idents = "PT", group.by = "class.All", split.by = "class.sample", pt.size = 1,) +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20),
+        axis.text.x = element_blank()
+      ) + xlab("") +
+  scale_fill_manual(values = custom_colors)
+
+
+```
+
+# Fig 5
+
+## Fig 5a: Cluster Correlation
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+rm(list = ls())
+
+rsq_table <- read.csv(here("Output", "R2_for_IRI_Vs_CACPR_Cluster_DEGs_NO_FILTER_2024.csv"))
+
+
+df <- rsq_table %>%
+                dplyr::select(CACPR, IRI, "R.squared")  %>%
+                mutate(CACPR = sub(".*\\.", "", CACPR)) %>%
+                mutate(IRI = sub(".*\\.", "", IRI)) %>%
+                pivot_wider(names_from = IRI, values_from = "R.squared") %>%
+                column_to_rownames(var = "CACPR") %>%
+                as.matrix()
+
+rownames(df) <- sub("^CACPR_All_", "", rownames(df))
+colnames(df) <- sub("^IRI_All_", "", colnames(df))
+
+corrplot(df, method = 'color', tl.col = 'black')
+
+extract_suffix <- function(string) {
+  parts <- str_split(string, "_")[[1]]
+  if (length(parts) > 2) {
+    return(parts[3])
+  } else {
+    return(NA)
+  }
+}
+
+rsq_table2 <- rsq_table %>%
+  mutate(
+    CACPR_suffix = sapply(CACPR, extract_suffix),
+    IRI_suffix = sapply(IRI, extract_suffix),
+    Same_Ending = if_else(CACPR_suffix == IRI_suffix, TRUE, FALSE)
+  ) %>%
+  select(-CACPR_suffix, -IRI_suffix) 
+
+df4 <- rsq_table2 %>%
+  group_by(Same_Ending) %>%
+  summarize(
+    "Mean R2" = mean(R.squared, na.rm = TRUE),
+    SEM = sd(R.squared, na.rm = TRUE) / sqrt(n())
+  ) %>%
+  as.data.frame()
+
+df4
+
+```
+
+## Fig 5b: Cluster Correlation Example (PT)
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+rm(list = ls())
+
+load(here("Output", "CACPR_All_Cluster_DEGs.Rdata"))
+load(here("Output", "IRI_All_Cluster_DEGs.Rdata"))
+
+  x.markers <- CACPR_All_PT
+  
+  #Making “Gene Names” as Column 1
+  x.markers_tb <- x.markers %>%
+    data.frame() %>% 
+    as_tibble()
+  
+  y.markers <- IRI_All_PT
+    
+    y.markers_tb <- y.markers %>%
+      data.frame() %>%
+      as_tibble()
+    
+    #X-Y DEGs Intersection Table
+    
+    xy.comp <- inner_join(x.markers_tb, y.markers_tb, by = "gene")
+    
+    #Set Range for Far Right Data Points
+    df.upper <- subset(xy.comp, avg_log2FC.x > -.32 & avg_log2FC.y > -.32)
+    #Set Range for Far Left Data Points
+    df.lower <- subset(xy.comp, avg_log2FC.x < 0.32 & avg_log2FC.y < .32)
+    
+    xy.comp.plot <- ggplot(xy.comp, aes(x = avg_log2FC.x, y = avg_log2FC.y, label=gene)) +
+      theme_classic() +
+      geom_point(
+        color=dplyr::case_when(
+          (xy.comp$avg_log2FC.x > 1 & xy.comp$avg_log2FC.y > 1) ~ "#1b9e77", #sets color for df.upper points
+          (xy.comp$avg_log2FC.x < -1 & xy.comp$avg_log2FC.y < -1) ~ "#d95f02", #sets color for df.lower points
+          TRUE ~ "black")) +
+      geom_text_repel(data=rbind(df.upper, df.lower),
+                      segment.sixy.compe  = 0.2, #<--!! what is this?? !!--
+                      segment.color = "grey50") +
+      geom_smooth (method=lm) +
+      labs(
+        title = paste("Correlation of Log2FC Values of DEGs from",
+                      "CACPR", "and",
+                      "IRI", sep = " "), 
+        x = paste("Average log2FC", "CACPR"), 
+        y = paste("Average log2FC ", "IRI")
+      ) +
+      stat_poly_eq(aes(label = paste(..rr.label.., sep = "~~~")),
+                   label.x.npc = "left", label.y.npc = 0.90, #set the position of the eq
+                   rr.digits = 3)
+    
+    print(xy.comp.plot)
+
+
+
+
+```
+
+## Fig 5c: Condition Correlation
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+rm(list = ls())
+
+rsq_table <- read.csv(here("Output", "R2_for_IRI_Vs_CACPR_Condition_DEGs_No_Filter.csv"))
+
+
+df <- rsq_table %>%
+                dplyr::select(CACPR, IRI, "R.squared") %>%
+                mutate(CACPR = sub(".*\\.", "", CACPR)) %>%
+                mutate(IRI = sub(".*\\.", "", IRI)) %>%
+                pivot_wider(names_from = IRI, values_from = "R.squared") %>%
+                column_to_rownames(var = "CACPR") %>%
+                as.matrix()
+
+rownames(df) <- sub("^CACPR_All_", "", rownames(df))
+colnames(df) <- sub("^IRI_All_", "", colnames(df))
+
+corrplot(df, method = 'color', tl.col = 'black') 
+
+extract_suffix <- function(string) {
+  parts <- str_split(string, "_")[[1]]
+  if (length(parts) > 2) {
+    return(parts[3])
+  } else {
+    return(NA)
+  }
+}
+
+rsq_table2 <- rsq_table %>%
+  mutate(
+    CACPR_suffix = sapply(CACPR, extract_suffix),
+    IRI_suffix = sapply(IRI, extract_suffix),
+    Same_Ending = if_else(CACPR_suffix == IRI_suffix, TRUE, FALSE)
+  ) %>%
+  select(-CACPR_suffix, -IRI_suffix) 
+
+df5 <- rsq_table2 %>%
+  group_by(Same_Ending) %>%
+  summarize(
+    "Mean R2" = mean(R.squared, na.rm = TRUE),
+    SEM = sd(R.squared, na.rm = TRUE) / sqrt(n())
+  ) %>%
+  as.data.frame()
+
+df5
+
+
+```
+
+## Fig 5d: Condition Correlation Example (PT)
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+rm(list = ls())
+
+load(here("Output", "CACPR_All_Condition_DEGs.Rdata"))
+load(here("Output", "IRI_All_Condition_DEGs.Rdata"))
+
+  x.markers <- CACPR_All_PT
+  
+  #Making “Gene Names” as Column 1
+  x.markers_tb <- x.markers %>%
+    data.frame() %>% 
+    as_tibble()
+  
+  y.markers <- IRI_All_PT
+    
+    y.markers_tb <- y.markers %>%
+      data.frame() %>%
+      as_tibble()
+    
+    #X-Y DEGs Intersection Table
+    
+    xy.comp <- inner_join(x.markers_tb, y.markers_tb, by = "gene")
+    
+    #Set Range for Far Right Data Points
+    df.upper <- subset(xy.comp, avg_log2FC.x > -.32 & avg_log2FC.y > -.32)
+    #Set Range for Far Left Data Points
+    df.lower <- subset(xy.comp, avg_log2FC.x < 0.32 & avg_log2FC.y < .32)
+    
+    xy.comp.plot <- ggplot(xy.comp, aes(x = avg_log2FC.x, y = avg_log2FC.y, label=gene)) +
+      theme_classic() +
+      geom_point(
+        color=dplyr::case_when(
+          (xy.comp$avg_log2FC.x > 1 & xy.comp$avg_log2FC.y > 1) ~ "#1b9e77", #sets color for df.upper points
+          (xy.comp$avg_log2FC.x < -1 & xy.comp$avg_log2FC.y < -1) ~ "#d95f02", #sets color for df.lower points
+          TRUE ~ "black")) +
+      geom_text_repel(data=rbind(df.upper, df.lower),
+                      segment.sixy.compe  = 0.2, #<--!! what is this?? !!--
+                      segment.color = "grey50") +
+      geom_smooth (method=lm) +
+      labs(
+        title = paste("Correlation of Log2FC Values of DEGs from",
+                      "CACPR", "and",
+                      "IRI", sep = " "), 
+        x = paste("Average log2FC", "CACPR"), 
+        y = paste("Average log2FC ", "IRI")
+      ) +
+      stat_poly_eq(aes(label = paste(..rr.label.., sep = "~~~")),
+                   label.x.npc = "left", label.y.npc = 0.90, #set the position of the eq
+                   rr.digits = 3)
+    
+    print(xy.comp.plot)
+
+```
+
+# Bonus: Ribosome Story
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=16, fig.height=6}
+
+All <- readRDS(here("Output", "All_integrated.rds"))
+DefaultAssay(All) <- "RNA"
+SO <- All
+Idents(SO) <- SO@meta.data$class.sample
+SO
+
+SO2 <- subset(SO, idents = c("CACPR Sham", "IRI Sham", "CACPR", "IRI"), downsample = 5524)
+
+
+
+FeaturePlot(SO2, "percent.ribo", split.by = "class.sample", pt.size = 1, order = TRUE, max.cutoff = 5) & xlab("UMAP 1") & ylab("UMAP 2") +
+  theme_classic() &
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20),
+         legend.position = "none")
+
+```
+
+### Set the color palette
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+custom_colors <- c(
+  "CACPR Sham" = "#4974A5",
+  "CACPR" = "#B81316",
+  "IRI Sham" = "#45B4A6",
+  "IRI" = "#B755B6"
+)
+
+```
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+VlnPlot(SO2, "percent.ribo", group.by = "class.sample", y.max = 5) +
+  scale_fill_manual(values = custom_colors) 
+
+```
+
+# Session Info
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+sessionInfo()
+
+```
+
+
+  

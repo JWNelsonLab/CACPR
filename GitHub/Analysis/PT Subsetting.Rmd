@@ -1,0 +1,527 @@
+---
+title: "Dataset Integration"
+author: "Jonathan Nelson"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: bootstrap
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Packages
+```{r load new packages, echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!requireNamespace('BiocManager', quietly = TRUE)) {install.packages('BiocManager'); require("BiocManager")}
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("sctransform")) {install.packages("sctransform"); require("sctransform")}
+if (!require("glmGamPoi")) {BiocManager::install('glmGamPoi'); require("glmGamPoi")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("EnhancedVolcano")) {BiocManager::install('EnhancedVolcano'); require("EnhancedVolcano")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("gghighlight")) {install.packages("gghighlight"); require("gghighlight")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("here")) {install.packages("here"); require("here")}
+
+here::here()
+
+```
+#PT Work
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.show='hide', fig.align = 'center'}
+
+
+SO <- readRDS(here("Output", "ALL_integrated.rds"))
+SO
+
+DefaultAssay(SO) <- "RNA"
+
+Idents(SO) <- SO@meta.data$class.All
+
+DimPlot(SO)
+
+SO2 <- subset(SO, idents = "PT")
+
+DimPlot(SO2)
+
+SO2 <- NormalizeData(SO2, normalization.method = "LogNormalize", scale.factor = 10000)
+
+SO2 <- FindVariableFeatures(SO2, selection.method = "vst", nfeatures = 2000)
+
+all.genes <- rownames(SO2)
+SO2 <- ScaleData(SO2, features = all.genes)
+
+SO2 <- RunPCA(SO2, features = VariableFeatures(object = SO2))
+
+ElbowPlot(SO2)
+
+SO2 <- FindNeighbors(SO2, dims = 1:50)
+SO2 <- FindClusters(SO2, resolution = 0.50)
+
+SO2 <- RunUMAP(SO2, dims = 1:50)
+
+DimPlot(SO2, reduction = "umap")
+DimPlot(SO2, reduction = "umap", group.by = "class.sample")
+
+SO2.list <- SplitObject(SO2, split.by = "class.sample")
+
+SO2.list <- lapply(X = SO2.list, FUN = function(x) {
+  x <- NormalizeData(x, verbose = FALSE)
+  x <- FindVariableFeatures(x, verbose = FALSE)
+})
+
+features <- SelectIntegrationFeatures(object.list = SO2.list)
+SO2.list <- lapply(X = SO2.list, FUN = function(x) {
+  x <- ScaleData(x, features = features, verbose = FALSE)
+  x <- RunPCA(x, features = features, verbose = FALSE)
+})
+
+anchors <- FindIntegrationAnchors(object.list = SO2.list, reduction = "rpca", dims = 1:15)
+SO2 <- IntegrateData(anchorset = anchors, dims = 1:50)
+
+SO2 <- ScaleData(SO2, verbose = FALSE)
+SO2 <- RunPCA(SO2, verbose = FALSE)
+
+DefaultAssay(SO2) <- "integrated"
+
+SO2 <- FindNeighbors(SO2, reduction = "pca", dims = 1:10)
+SO2 <- FindClusters(SO2, resolution = 1)
+SO2 <- RunUMAP(SO2, dims = 1:10)
+
+
+DimPlot(SO2, reduction = "umap", label = T)
+DimPlot(SO2, reduction = "umap", group.by = "class.sample")
+DimPlot(SO2, reduction = "umap", split.by = "class.sample")
+
+DimPlot(SO2, reduction = "umap", group.by = "class.lab")
+DimPlot(SO2, reduction = "umap", split.by = "class.lab")
+
+table(Idents(SO2))
+
+table(Idents(SO2), SO2$class.sample)
+
+
+```
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.show='hide', fig.align = 'center'}
+
+DefaultAssay(SO2) <- "RNA"
+
+FeaturePlot(SO2, "Havcr1", split.by = "class.sample")
+
+VlnPlot(SO2, "Havcr1", split.by = "class.sample", group.by = "class.sample")
+VlnPlot(SO2, "Lrp2", split.by = "class.sample", group.by = "class.sample")
+VlnPlot(SO2, "Slc12a1", split.by = "class.sample", group.by = "class.sample")
+
+
+cells.to.sample <- length(PD@active.ident)
+
+# Sample from HV as many cells as there are cells in PD
+# For reproducibility, set a random seed
+set.seed(12)
+sampled.cells <- sample(x = HV@active.ident, size = cells.to.sample, replace = F)
+
+# Subset Seurat object
+HV.sub <- subset(x=HV, cells = sampled.cells)
+
+
+downsampled.obj <- large.obj[, class.sample(colnames(large.obj), size = ncol(small.obj), replace=F)]
+
+p
+
+SO.subsampled <- SO[, sample(colnames(pbmc), size =5524, replace=F)]
+
+table(SO@meta.data$class.sample)
+
+
+CACPR CACPR Sham        IRI   IRI Sham 
+      5524       7200      20827      22983
+      
+
+Idents(SO) <- SO@meta.data$class.sample
+DimPlot(SO)
+SO
+
+SO.subsampled <- subset(SO, idents = c("CACPR Sham", "IRI Sham", "CACPR", "IRI"), downsample = 5524)
+
+DimPlot(SO.subsampled)
+DimPlot(SO, split.by = "class.sample", group.by = "class.All")
+DimPlot(SO.subsampled, split.by = "class.sample", group.by = "class.All")
+
+
+SO.subsampled
+
+```
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.show='hide', fig.align = 'center'}
+
+SO2 <- SO
+
+markers.to.plot.PT <- c("Ccl2",        # PEC
+                      "Sema5a",        # Lymph
+                      "Dcdc2a",         # Endo
+                      "Vcam1",         # Glom Endo
+                      "Hspa1a",          # Capillary Endo
+                      "Krt20",       # Perivascular
+                      "Havcr1",       # Fib
+                      "Myc",       # Mesangial
+                      "Top2a",        # Mural
+                      "Slc16a9",        # B/T Cells 
+                      "Slc13a3",        # Uro
+                      "Slc5a12",
+                      "Lrp2" 
+                      )
+
+
+DefaultAssay(SO2) <- "RNA"
+
+SO2[["percent.ribo"]]  <- PercentageFeatureSet(SO2, pattern = "^Rp")
+
+head(SO@meta.data)
+
+FeaturePlot(SO2, "percent.ribo", split.by = "class.sample")
+
+SO2@meta.data <- SO2@meta.data %>% 
+  mutate(subclass.PT = case_when(
+     seurat_clusters == 0 ~ "PTinj",
+    seurat_clusters == 1 ~ "PTS2",
+    seurat_clusters == 2 ~ "PTS1",
+    seurat_clusters == 3 ~ "PTinj",
+    seurat_clusters == 4 ~ "PTS2",
+    seurat_clusters == 5 ~ "PTS3",
+    seurat_clusters == 6 ~ "PTinj",
+    seurat_clusters == 7 ~ "PTS2",
+    seurat_clusters == 8 ~ "PTS1",
+    seurat_clusters == 9 ~ "PTS2",
+    seurat_clusters == 10 ~ "PTS1",
+    seurat_clusters == 11 ~ "PTinj",
+    seurat_clusters == 12 ~ "PTS2",
+    seurat_clusters == 13 ~ "PTS1",
+    seurat_clusters == 14 ~ "PTinj",
+    seurat_clusters == 15 ~ "PTS3",
+    seurat_clusters == 16 ~ "PTinj",
+    seurat_clusters == 17 ~ "PTinj Severe",
+    seurat_clusters == 18 ~ "PTinj Severe",
+    seurat_clusters == 19 ~ "PTS3",
+    seurat_clusters == 20 ~ "PTinj",
+    TRUE ~ NA_character_  # Handle any unexpected values
+  )) 
+
+SO2@meta.data <- SO2@meta.data %>% 
+  mutate(class.PT = case_when(
+     seurat_clusters == 0 ~ "PTinj",
+    seurat_clusters == 1 ~ "PTS2",
+    seurat_clusters == 2 ~ "PTS1",
+    seurat_clusters == 3 ~ "PTinj",
+    seurat_clusters == 4 ~ "PTS2",
+    seurat_clusters == 5 ~ "PTS3",
+    seurat_clusters == 6 ~ "PTinj",
+    seurat_clusters == 7 ~ "PTS2",
+    seurat_clusters == 8 ~ "PTS1",
+    seurat_clusters == 9 ~ "PTS2",
+    seurat_clusters == 10 ~ "PTS1",
+    seurat_clusters == 11 ~ "PTinj",
+    seurat_clusters == 12 ~ "PTS2",
+    seurat_clusters == 13 ~ "PTS1",
+    seurat_clusters == 14 ~ "PTinj",
+    seurat_clusters == 15 ~ "PTS3",
+    seurat_clusters == 16 ~ "PTinj",
+    seurat_clusters == 17 ~ "PTinj",
+    seurat_clusters == 18 ~ "PTinj",
+    seurat_clusters == 19 ~ "PTS3",
+    seurat_clusters == 20 ~ "PTinj",
+    TRUE ~ NA_character_  # Handle any unexpected values
+  )) 
+
+
+SO2@meta.data$subclass.PT <- factor(SO2@meta.data$subclass.PT, levels = c("PTS1", "PTS2", "PTS3", "PTinj", "PTinj Severe"))
+
+SO2@meta.data$class.PT <- factor(SO2@meta.data$class.PT, levels = c("PTS1", "PTS2", "PTS3", "PTinj"))
+
+DimPlot(SO2, label = T)
+DimPlot(SO2, label = T, group.by = "subclass.PT")
+DimPlot(SO2, label = T, group.by = "class.PT")
+
+DimPlot(SO2,  group.by = "subclass.PT", split.by = "class.sample")
+
+DotPlot(SO2,
+features = markers.to.plot.PT,
+dot.scale = 8,
+dot.min = 0,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5, 
+assay = "RNA",
+group.by = "subclass.PT") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  coord_flip()
+
+Idents(SO2) <- SO2@meta.data$subclass.PT
+
+DotPlot(SO2, features = markers.to.plot.PT, dot.scale = 8, cols = c("dodgerblue2", "coral2"), split.by = "class.lab") + xlab(label = "") + ylab(label = "Lab") 
+
+
+
+
+t1 <- table(SO2@meta.data$subclass.PT, SO2@meta.data$class.sample)[, c("CACPR Sham", "IRI Sham", "CACPR", "IRI")]
+t1
+
+prop.t1 <- prop.table(t1, margin = 2) 
+prop.t1
+
+t2 <- as.data.frame(t1)
+colnames(t2) <- c('Cell_type', 'Experimental_Group', 'Frequency')
+
+# Original plot
+
+ggplot(t2, aes(fill=Cell_type, y=Frequency, x=Experimental_Group)) + 
+  geom_bar(position="fill", stat = "identity", fun.y = "mean", colour="black") +
+  theme_classic()
+
+
+for (i in markers.to.plot.PT) {
+  A <- FeaturePlot(SO2, i, order = TRUE)
+  B <- VlnPlot(SO2, i, group.by = "subclass.PT")
+  print(A)
+  print(B)
+  }
+
+saveRDS(SO2, here("Output", "All_PT.rds"))
+
+```
+
+
+# Unique 2 Enriched CACPR genes
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+rm(list = ls())
+
+load(here("Output", "CACPR_All_Condition_DEGs.RData"))
+
+allobj <- ls()
+alldf <- sapply(allobj, get, simplify = FALSE)
+
+alldf <- alldf[c("CACPR_All_PT", "CACPR_All_DTL", "CACPR_All_TAL", "CACPR_All_DCT", 
+                   "CACPR_All_CNT", "CACPR_All_PC", "CACPR_All_ICA", "CACPR_All_ICB", 
+                   "CACPR_All_URO", "CACPR_All_PEC", "CACPR_All_FIB", "CACPR_All_CONTRACT", 
+                   "CACPR_All_PODO", "CACPR_All_EC", "CACPR_All_IMMUNE")]
+
+
+genelistup <- lapply(alldf,function(i) i[1:100, c(1)]) %>% data.frame
+
+genelistup <- genelistup %>% tidyr::gather() %>% distinct(value, .keep_all = T) %>% group_by(key) %>% filter(row_number()== c(1,2,3))
+
+genelistup <- unlist(genelistup$value)
+
+genelistdown <- lapply(alldf,function(i) i[order(i[,"avg_log2FC"], decreasing = FALSE),])
+genelistdown <- lapply(genelistdown,function(i) i[1:100, c(1)]) %>% data.frame
+
+genelistdown <- genelistdown %>% tidyr::gather() %>% distinct(value, .keep_all = T) %>% group_by(key) %>% filter(row_number()== c(1,2,3))
+
+genelistdown<- unlist(genelistdown$value)
+
+
+All_Integrated <- readRDS(here("Output", "All_integrated.rds"))
+
+Idents(All_Integrated) <- All_Integrated@meta.data$class.sample
+
+SO <- subset(All_Integrated, idents = c("CACPR Sham", "CACPR"))
+DefaultAssay(SO) <- "RNA"
+Idents(SO) <- SO@meta.data$class.All
+
+SO@meta.data <- SO@meta.data %>% 
+  mutate(class.Names = case_when(
+     Sample == "MH1" ~ "CACPR",
+     Sample == "MH3" ~ "Sham",
+))
+
+```
+
+
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE, fig.width=16}
+
+DotPlot(SO, features = genelistup, dot.scale = 8, cols = c("dodgerblue2", "coral2"), split.by = "class.Names") +  RotatedAxis() + xlab(label = "") + ylab(label = "CACPR Enriched") 
+
+```
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE, fig.width=16}
+
+DotPlot(SO, features = genelistdown, dot.scale = 8, cols = c("dodgerblue2", "coral2"), split.by = "class.Names") +  RotatedAxis() + xlab(label = "") + ylab(label = "CACPR Enriched") 
+
+```
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center'}
+
+
+
+seu.obj$samples <- paste0(seu.obj$Diet, # CHANGE # Treatment column for this dataset is 'Diet'
+                          seu.obj$Rep)  # CHANGE # Sample ID column is 'Rep'
+
+head(SO@meta.data)
+
+cts <- AggregateExpression(SO, 
+                           group.by = c("class.All",     # the column with the cell type information
+                                        "class.sample"), # the column with both condition and sample ID
+                           assays = 'RNA', 
+                           slot = "counts",
+                           return.seurat = FALSE)
+
+cts <- cts$RNA
+cts[1:10, 1:10]
+
+cts.t <- t(cts)
+cts.t <- as.data.frame(cts.t)
+
+cts.t
+
+# Calculate the ration of the two columns that end in "CACPR" and "CACPR Sham"
+
+
+
+
+
+
+
+
+splitRows <- gsub('_.*', '', rownames(cts.t)) 
+splitRows
+
+cts.split <- split.data.frame(cts.t,
+                              f = factor(splitRows))
+
+# Create a new row that calculate "PT_CACPR"/"PT_CACPR Sham" ratio
+
+
+# Extract rows ending with "CACPR" or "CACPR Sham"
+rows_cacpr <- grepl("CACPR$", rownames(cts.t))
+rows_cacpr_sham <- grepl("CACPR Sham$", rownames(cts.t))
+
+# Calculate ratios
+ratios <- cts.t[rows_cacpr, -1] / cts.t[rows_cacpr_sham, -1]
+
+# Create a new row with the calculated ratios
+new_row <- c("Ratio_CACPR", ratios)
+data <- rbind(cts.t, new_row)
+
+if (length(new_row) < ncol(cts.t)) {
+  new_row <- c(new_row, rep(NA, ncol(cts.t) - length(new_row)))
+}
+
+data <- rbind(cts.t, new_row)
+
+# Print the updated data
+print(data)
+
+data <- as.data.frame(ratios)
+
+# use dplyr to save the columns in the dataframe "data" that match the list from "genelistup" 
+
+data2 <- data %>% select(all_of(genelistup))
+
+#create a heatmap of the data
+
+data2_numeric <- as.matrix(df)
+
+heatmap(data2_numeric, Rowv = NA, Colv = NA, col = cm.colors(256), scale = "column",
+        margins = c(5, 10))
+
+df <- data2
+
+df[is.infinite(df)] <- NA
+
+df2 <-within(df, 
+              {Minutespergoal<-Minutes_played/Goal })[Goal != 0]
+
+
+# Calculate ratios with handling division by zero
+ratios <- ifelse(cts.t[rows_cacpr_sham, -1] == 0, NA, cts.t[rows_cacpr, -1] / cts.t[rows_cacpr_sham, -1])
+
+# Replace NaN and Inf with NA
+ratios <- as.numeric(cts.t[rows_cacpr, -1]) / as.numeric(cts.t[rows_cacpr_sham, -1])
+ratios[is.infinite(ratios) | is.nan(ratios)] <- NA
+
+# Create a new row for ratios
+new_row <- c("Ratio_CACPR", ratios)
+
+# Ensure the new row has the same length as the original cts.t (add NA values if necessary)
+if (length(new_row) < ncol(cts.t)) {
+  new_row <- c(new_row, rep(NA, ncol(cts.t) - length(new_row)))
+}
+
+df3 <- as.data.frame(ratios)
+
+df4 <- df3[is.nan(df3) | is.infinite(df3)] <- NA
+
+for (col in names(df)) {
+  df[[col]][is.nan(df[[col]]) | is.infinite(df[[col]])] <- NA
+}
+
+# create a heatmap with ggplot2 starting with the dataframe "df"
+
+df <- data2
+
+
+
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center'}
+
+# create a heatmap with ggplot2 starting with the dataframe "df"
+
+
+data3 <- data.frame(row = rownames(data2), data2)
+rownames(data3) <- NULL
+
+data3_long <- gather(data3, key = "column", value = "value", -row)
+
+ggplot(data2_long, aes(x = column, y = row, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "blue") +  # Adjust color gradient as needed
+  labs(title = "Heatmap of Data2", x = "Column", y = "Row") +
+  theme_minimal()
+
+
+# Add row names as a column
+data3 <- data2 %>%
+  mutate(row = rownames(data2)) %>%
+  gather(key = "column", value = "value", -row) %>%
+  arrange(row)
+
+# Create the heatmap using ggplot2
+ggplot(data3, aes(x = column, y = row, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient(limits = c(0, 10),low = "white", high = "blue") +
+  labs(title = "Heatmap of Data2", x = "Column", y = "Row") +
+  theme_minimal()
+
+```
+
+# Session Info
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center'}
+
+sessionInfo()
+```

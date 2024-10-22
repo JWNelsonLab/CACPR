@@ -1,0 +1,1087 @@
+---
+title: "Differentiation Score"
+author: "Jonathan Nelson, Mike Hutchens, and Kevin Burfeind"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: bootstrap
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("BiocManager")) {install.packages("BiocManager"); require("BiocManager")}
+if (!require("tibble")) {install.packages("tibble"); require("tibble")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")} #color
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("kableExtra")) {install.packages("kableExtra"); require("kableExtra")} # for color brewer
+
+```
+
+# CACPR and IRI samples
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=12, fig.height=6}
+
+rm(list = ls())
+
+All <- readRDS(here("Output", "All_integrated.rds"))
+
+All@meta.data$class.sample <- factor(All@meta.data$class.sample, levels = c("CACPR Sham", "CACPR", "IRI Sham", "IRI"))
+
+Idents(All) <- All@meta.data$class.sample
+All
+
+All2 <- subset(All, idents = c("CACPR Sham", "IRI Sham", "CACPR", "IRI"), downsample = 5524)
+All2 
+
+
+Idents(All) <- All@meta.data$subclass.All
+
+Idents(All) <- All@meta.data$class.sample
+
+VlnPlot(All, "Atp1a1", group.by = "subclass.All", split.by = "class.sample", idents = c("CACPR Sham", "CACPR"))
+
+VlnPlot(All, "Atp1a1")
+
+VlnPlot(All, "Atp1a1", split.by = "class.sample", idents = c("TAL1", "TAL2"))
+
+VlnPlot(All, "Atp1b1")
+
+VlnPlot(All, "Atp1b1", split.by = "class.sample", idents = c("TAL1", "TAL2"))
+
+VlnPlot(All, "Slc12a1")
+
+VlnPlot(All, "Slc12a1", split.by = "class.sample", idents = c("TAL1", "TAL2"))
+
+head(All@meta.data)
+```
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=12, fig.height=8}
+
+
+DimPlot(All2, group.by = "class.sample")
+
+DimPlot(All2, group.by = "subclass.All")
+
+Idents(All2) <- All@meta.data$class.sample
+
+Sham <- subset(All2, idents = c("CACPR Sham", "IRI Sham"))
+
+DimPlot(Sham)
+
+Idents(Sham) <- Sham@meta.data$subclass.All
+
+DimPlot(Sham)
+
+clusters <- unique(Idents(Sham))
+names(clusters) <-clusters
+
+#clusters <- c("PTS1", "PTS2", "PTS3", "PTinj")
+#names(clusters) <-clusters
+
+SO2 <- All
+
+# changed min.pct from .25 to 5 to see if there are more robus markers. 
+
+for (i in clusters) {
+  DEGs <- FindMarkers(Sham, ident.1 = i, min.pct = .5, logfc.threshold = .5, only.pos = TRUE)
+  DEGs <- DEGs %>% arrange(desc(avg_log2FC))
+  DEGs <- rownames(DEGs)
+  DEGs <- DEGs %>% head(10)
+  DEGs <- list(DEGs)
+  print(i)
+  print(DEGs)
+  SO2 <- AddModuleScore(SO2, features = DEGs, name = paste0(i ,"_Score"))
+}
+
+head(SO2@meta.data)
+
+VlnPlot(SO2, features = c("PTS1_Score1"), split.by = "class.sample", group.by = "subclass.All")
+VlnPlot(SO2, features = c("PTS2_Score1"), split.by = "class.sample", group.by = "subclass.All")
+VlnPlot(SO2, features = c("TAL1_Score1"), split.by = "class.sample", group.by = "subclass.All")
+VlnPlot(SO2, features = c("DCT1_Score1"), split.by = "class.sample", group.by = "subclass.All")
+
+#df <- FetchData(object = SO2, vars = c("subclass.CACPR", "PTS1_Score1" , "PTS2_Score1", "PTS3_Score1", "PTinj_Score1"))
+
+df <- FetchData(object = SO2, vars = c("subclass.All", "PTS1_Score1" , "PTS2_Score1", "PTS3_Score1", "PTinj_Score1", "DTL_Score1", "TAL1_Score1", "TAL2_Score1", "DCT1_Score1", "DCT2_Score1", "CNT_Score1", "PC_Score1", "ICA_Score1", "ICB_Score1", "URO_Score1", "PEC_Score1", "FIB_Score1", "CONTRACT_Score1", "PODO_Score1", "EC_Score1", "IMMUNE_Score1"))
+
+# remove the "_Score1" from the column names
+
+colnames(df) <- gsub("_Score1", "", colnames(df))
+
+df2 <- df
+
+for (i in clusters) {
+  df2 <- df2 %>%
+    mutate(!!paste0(i, "_Diff") := ifelse(subclass.All == i, !!sym(i), NA_real_))
+}
+
+# delete the rows of a dataframe if they don't end in "_Diff"
+
+df3 <- df2 %>% select(ends_with("_Diff"))
+
+# create a new column in df3 that contains the max value of each row
+
+df3$Diff <- apply(df3, 1, max, na.rm = TRUE)
+
+# delete all rows except for Diff
+
+df3 <- df3 %>% select(Diff)
+
+# Add Diff column to meta.data
+
+All <- AddMetaData(All, df3)
+
+head(All@meta.data)
+
+DimPlot(All)
+
+Idents(All) <- All@meta.data$subclass.All
+
+VlnPlot(All, features = c("Diff"), group.by = "class.sample")
+
+```
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=18, fig.height=8}
+
+VlnPlot(All, features = c("Diff"), split.by = "class.sample")
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=12, fig.height=8}
+
+
+df1a <- FetchData(object = All, vars = c("subclass.All", "class.All", "type.All", "class.sample", "Diff"))
+
+#Summarize df1a by calculating median for "Diff" grouped by "subclass.CACPR" and "class.sample"
+
+df1b <- df1a %>%
+  group_by(subclass.All, class.sample) %>%
+  summarize(median = median(Diff, na.rm = TRUE))
+
+# Create a new column that calculates the difference between the median of "Diff" for "CACPR" and "CACPR Sham" or "IRI" and "IRI Sham"
+
+# Separate df1b into two dataframes, one for class.sample = "CACPR" and "CACPR Sham" and one for class.sample = "IRI" and "IRI Sham"
+
+df1b_cacpr <- df1b[df1b$class.sample %in% c("CACPR", "CACPR Sham"), ]
+
+
+# Create a new column that calculates the difference between the median of "Diff" for "CACPR" and "Sham"
+
+df1b_cacpr <- df1b_cacpr %>%
+  mutate(Diff = ifelse(class.sample == "CACPR", (median - lag(median)), NA_real_))
+
+df1b_cacpr$subclass.All <- factor(df1b_cacpr$subclass.All, levels = df1b_cacpr$subclass.All[order(df1b_cacpr$Diff, na.last = NA)])
+
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=30, fig.height=6}
+
+# create a plot of Diff by subclass.All
+
+ggplot(df1b_cacpr, aes(x = subclass.All, y = Diff, fill = class.sample)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Subclass") +
+  ylab("Difference in median score") +
+  ggtitle("Difference in median score between CACPR and Sham")
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=30, fig.height=6}
+
+df1b_iri <- df1b[df1b$class.sample %in% c("IRI", "IRI Sham"), ]
+
+df1b_iri <- df1b_iri %>%
+  mutate(Diff = ifelse(class.sample == "IRI", (median - lag(median)), NA_real_))
+
+df1b_iri$subclass.All <- factor(df1b_iri$subclass.All, levels = df1b_iri$subclass.All[order(df1b_iri$Diff, na.last = NA)])
+
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=30, fig.height=6}
+
+# create a plot of Diff by subclass.All
+
+ggplot(df1b_iri, aes(x = subclass.All, y = Diff, fill = class.sample)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Subclass") +
+  ylab("Difference in median score") +
+  ggtitle("Difference in median score between IRI and Sham")
+
+```
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=30, fig.height=6}
+
+
+df5 <- df1a %>%
+  group_by(subclass.All, class.sample) %>%
+  summarize(
+    Median = median(Diff, na.rm = TRUE),
+    Mean = mean(Diff, na.rm = TRUE),
+    SD = sd(Diff, na.rm = TRUE)) 
+
+# Graph Mean grouped by class.All and class. sample
+
+ggplot(df5, aes(x = subclass.All, y = Mean, fill = class.sample)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Subclass") +
+  ylab("Mean score") +
+  ggtitle("Mean score by subclass and class.sample")
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=30, fig.height=6}
+
+
+df2a <- df1a %>%
+  group_by(subclass.All, class.sample) %>%
+  summarize(
+    Median = median(Diff, na.rm = TRUE),
+    Mean = mean(Diff, na.rm = TRUE),
+    SD = sd(Diff, na.rm = TRUE)) 
+
+# Healthy = mean +/- 2 SD
+# Injured = mean - 2-4 SD
+# Severe Injured = mean - 4-6 SD
+
+# Create a new Column called calculates Mean - 2 SD in df2a
+
+df2a <- df2a %>%
+  mutate(Healthy = Mean - 2 * SD,
+         SevereInjured = Mean - 4 * SD)
+
+# Only keep the rows in df2a that have a class.sample of "CACPR Sham"
+
+df2a_cacpr <- df2a[df2a$class.sample == "CACPR Sham", ]
+
+# Only keep the rows in df2a that have a class.sample of "IRI Sham"
+
+df2a_iri <- df2a[df2a$class.sample == "IRI Sham", ]
+
+
+# Split df1a into two dataframes, one for class.sample = "CACPR" and "CACPR Sham" and one for class.sample = "IRI" and "IRI Sham"
+
+df1a_cacpr <- df1a[df1a$class.sample %in% c("CACPR", "CACPR Sham"), ] %>% rownames_to_column()
+df1a_iri <- df1a[df1a$class.sample %in% c("IRI", "IRI Sham"), ] %>% rownames_to_column()
+
+# CACPR
+
+merged_df <- merge(df1a_cacpr, df2a_cacpr, by = "subclass.All", suffixes = c(".df1a", ".df2a"))
+
+# Calculate Z score
+
+merged_df <- merged_df %>%
+  mutate(zDiff = (Diff - Mean) / SD)
+
+# Differentiation <- State
+
+merged_df <- merged_df %>%
+  mutate(Differentiation = case_when(
+    Diff > Healthy ~ "High",
+    Diff <= Healthy & Diff > SevereInjured ~ "Medium",
+    Diff <= SevereInjured ~ "Low"
+  ))
+
+merged_df$Differentiation <- factor(merged_df$Differentiation, levels = c("High", "Medium", "Low"))
+
+merged_df <- merged_df %>% 
+  mutate(Epithelial = case_when(
+     type.All == "EPITHELIAL" ~ "EPITHELIAL",
+     type.All == "ENDOTHELIAL" ~ "NON-EPITHELIAL",
+     type.All == "STROMAL" ~ "NON-EPITHELIAL",
+     type.All == "IMMUNE" ~ "NON-EPITHELIAL",
+    ))
+
+merged_df <- merged_df %>% 
+  mutate(Zone = case_when(
+     subclass.All == "PTS1" ~ "CORTICAL",
+     subclass.All == "PTS2" ~ "CORTICAL",
+     subclass.All == "PTS3" ~ "CORTICAL",
+     subclass.All == "PTinj" ~ "CORTICAL",
+     subclass.All == "DTL" ~ "MEDULLARY",
+     subclass.All == "TAL1" ~ "MEDULLARY",
+     subclass.All == "TAL2" ~ "CORTICAL",
+     subclass.All == "DCT1" ~ "CORTICAL",
+     subclass.All == "DCT2" ~ "CORTICAL",
+     subclass.All == "CNT" ~ "CORTICAL",
+     subclass.All == "PC" ~ "MEDULLARY",
+     subclass.All == "ICA" ~ "MEDULLARY",
+     subclass.All == "ICB" ~ "MEDULLARY",
+     subclass.All == "URO" ~ "MEDULLARY",
+     .default = "OTHER"
+    ))
+
+merged_df_cacpr <-merged_df
+
+# Summarize the number of cells in each Differentiation  of "Differentiation " by subclass.All and then class.sample.df1a
+
+df2x <- merged_df %>%
+  group_by(subclass.All, class.sample.df1a, Differentiation ) %>%
+  summarize(Count = n())
+
+# summarize as a percentage of the total number of cells in each subclass.All
+
+df2x <- df2x %>%
+  group_by(subclass.All, class.sample.df1a) %>%
+  mutate(Percentage = Count / sum(Count) * 100)
+
+# split df2x by class.sample.df1a to create two dataframes one for "CACPR Sham" and "CACPR" and another for "IRI Sham" and "IRI"
+
+df_cacpr <- df2x %>%
+  filter(grepl("CACPR", class.sample.df1a))
+
+df_cacpr_sham <- df2x %>%
+  filter(grepl("CACPR Sham", class.sample.df1a))
+
+# Create a graph of the percentage of cells in each Differentiation  of "Differentiation " by subclass.All and then class.sample.df1a only for class.sample.df1a = "CACPR Sham" 
+
+ggplot(df_cacpr_sham, aes(x = subclass.All, y = Percentage, fill = Differentiation )) +
+  geom_bar(stat = "identity", position = "fill") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Subclass") +
+  ylab("Percentage of cells") +
+  ggtitle("Percentage of cells in each Differentiation  by subclass and class.sample")
+
+
+df_cacpr <- df2x %>%
+  filter(grepl("CACPR", class.sample.df1a))
+
+# Create a graph of the percentage of cells in each Differentiation  of "Differentiation " by subclass.All and then class.sample.df1a only for class.sample.df1a = "CACPR Sham" 
+
+ggplot(df_cacpr, aes(x = subclass.All, y = Percentage, fill = Differentiation )) +
+  geom_bar(stat = "identity", position = "fill") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Subclass") +
+  ylab("Percentage of cells") +
+  ggtitle("Percentage of cells in each Differentiation  by subclass and class.sample")
+
+```
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=30, fig.height=6}
+
+# IRI
+
+merged_df <- merge(df1a_iri, df2a_iri, by = "subclass.All", suffixes = c(".df1a", ".df2a"))
+
+# Calculate Z score
+
+merged_df <- merged_df %>%
+  mutate(zDiff = (Diff - Mean) / SD)
+
+merged_df <- merged_df %>%
+  mutate(Differentiation  = case_when(
+    Diff > Healthy ~ "High",
+    Diff <= Healthy & Diff > SevereInjured ~ "Medium",
+    Diff <= SevereInjured ~ "Low"
+  ))
+
+merged_df$Differentiation <- factor(merged_df$Differentiation, levels = c("High", "Medium", "Low"))
+
+merged_df <- merged_df %>% 
+  mutate(Epithelial = case_when(
+     type.All == "EPITHELIAL" ~ "EPITHELIAL",
+     type.All == "ENDOTHELIAL" ~ "NON-EPITHELIAL",
+     type.All == "STROMAL" ~ "NON-EPITHELIAL",
+     type.All == "EPITHELIAL" ~ "NON-EPITHELIAL",
+    ))
+
+merged_df <- merged_df %>% 
+  mutate(Zone = case_when(
+     subclass.All == "PTS1" ~ "CORTICAL",
+     subclass.All == "PTS2" ~ "CORTICAL",
+     subclass.All == "PTS3" ~ "CORTICAL",
+     subclass.All == "PTinj" ~ "CORTICAL",
+     subclass.All == "DTL" ~ "MEDULLARY",
+     subclass.All == "TAL1" ~ "MEDULLARY",
+     subclass.All == "TAL2" ~ "CORTICAL",
+     subclass.All == "DCT1" ~ "CORTICAL",
+     subclass.All == "DCT2" ~ "CORTICAL",
+     subclass.All == "CNT" ~ "CORTICAL",
+     subclass.All == "PC" ~ "MEDULLARY",
+     subclass.All == "ICA" ~ "MEDULLARY",
+     subclass.All == "ICB" ~ "MEDULLARY",
+     subclass.All == "URO" ~ "MEDULLARY",
+     .default = "OTHER"
+    ))
+
+merged_df_iri <- merged_df
+
+save(merged_df_cacpr, merged_df_iri, file = "Differentiation_merged_df.RData")
+
+load(here("Code", "Differentiation_merged_df.RData"))
+
+# Summarize the number of cells in each Differentiation  of "Differentiation " by subclass.All and then class.sample.df1a
+
+df2x <- merged_df %>%
+  group_by(subclass.All, class.sample.df1a, Differentiation ) %>%
+  summarize(Count = n())
+
+# summarize as a percentage of the total number of cells in each subclass.All
+
+df2x <- df2x %>%
+  group_by(subclass.All, class.sample.df1a) %>%
+  mutate(Percentage = Count / sum(Count) * 100)
+
+# split df2x by class.sample.df1a to create two dataframes one for "CACPR Sham" and "CACPR" and another for "IRI Sham" and "IRI"
+
+df_iri_sham <- df2x %>%
+  filter(grepl("IRI Sham", class.sample.df1a))
+
+# Create a graph of the percentage of cells in each Differentiation  of "Differentiation " by subclass.All and then class.sample.df1a only for class.sample.df1a = "CACPR Sham" 
+
+ggplot(df_iri_sham, aes(x = subclass.All, y = Percentage, fill = Differentiation )) +
+  geom_bar(stat = "identity", position = "fill") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Subclass") +
+  ylab("Percentage of cells") +
+  ggtitle("Percentage of cells in each Differentiation  by subclass and class.sample")
+
+
+df_iri <- df2x %>%
+  filter(grepl("IRI", class.sample.df1a))
+
+# Create a graph of the percentage of cells in each Differentiation  of "Differentiation " by subclass.All and then class.sample.df1a only for class.sample.df1a = "CACPR Sham" 
+
+ggplot(df_iri, aes(x = subclass.All, y = Percentage, fill = Differentiation )) +
+  geom_bar(stat = "identity", position = "fill") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Subclass") +
+  ylab("Percentage of cells") +
+  ggtitle("Percentage of cells in each Differentiation  by subclass and class.sample")
+
+
+# Filter df_cacpr to only contain class.sample.df1a group "CACPR"
+
+df_cacpr2 <- df_cacpr %>%
+  filter(class.sample.df1a == "CACPR")
+
+df_iri2 <- df_iri %>%
+  filter(class.sample.df1a == "IRI")
+
+# Merge df_cacpr and df_iri by "subclass.All" and Differentiation
+
+df_cacpr_iri <- merge(df_cacpr2, df_iri2, by = c("subclass.All", "Differentiation"), suffixes = c(".CACPR", ".IRI"))
+```
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=10, fig.height=7}
+
+
+# Create a scatterplot of the percentage of cells in each Differentiation  of "Differentiation " by subclass.All for "CACPR" and "IRI"
+
+ggplot(df_cacpr_iri, aes(x = Percentage.CACPR, y = Percentage.IRI, color = Differentiation)) +
+  geom_point() +
+  theme_classic() +
+  theme(axis.line = element_line(size = 2, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Percentage of cells in Differentiation  by CACPR") +
+  ylab("Percentage of cells in Differentiation  by IRI") +
+  ggtitle("Percentage of cells in each Differentiation  by subclass and class.sample")
+
+# Calcualte the R2 value for the scatterplot
+
+R2Scatter <- cor(df_cacpr_iri$Percentage.CACPR, df_cacpr_iri$Percentage.IRI)^2
+
+print(R2Scatter)
+
+```
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=10, fig.height=7}
+
+ggplot(df_cacpr_iri, aes(x = Percentage.CACPR, y = Percentage.IRI, color = subclass.All)) +
+  geom_point() +
+  theme_classic() +
+  theme(axis.line = element_line(size = 2, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Percentage of cells in Differentiation  by CACPR") +
+  ylab("Percentage of cells in Differentiation  by IRI") +
+  ggtitle("Percentage of cells in each Differentiation  by subclass and class.sample")
+
+
+
+```
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=10, fig.height=7}
+
+# Create a new column in df_cacpr_iri called "Diff" that adds the value of Percentage.CACPR for Differentiation  = "Injured" and "Severe"
+
+df_cacpr_iri2 <- df_cacpr_iri %>%
+  group_by(subclass.All) %>%
+  mutate(Diff.cacpr = sum(Percentage.CACPR[Differentiation  %in% c("Injured", "Severe")])) %>%
+  mutate(Diff.iri = sum(Percentage.IRI[Differentiation  %in% c("Injured", "Severe")])) %>%
+  ungroup()
+
+
+df_cacpr_iri2
+
+ggplot(df_cacpr_iri2, aes(x = Diff.cacpr, y = Diff.iri, color = Differentiation )) +
+  geom_point() +
+  theme_classic() +
+  theme(axis.line = element_line(size = 2, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Percentage of cells in Differentiation  by CACPR") +
+  ylab("Percentage of cells in Differentiation  by IRI") +
+  ggtitle("Percentage of cells in each Differentiation  by subclass and class.sample")
+
+ggplot(df_cacpr_iri2, aes(x = Diff.cacpr, y = Diff.iri, color = subclass.All)) +
+  geom_point() +
+  theme_classic() +
+  theme(axis.line = element_line(size = 2, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Percentage of cells in Differentiation  by CACPR") +
+  ylab("Percentage of cells in Differentiation  by IRI") +
+  ggtitle("Percentage of cells in each Differentiation  by subclass and class.sample")
+
+R2Scatter <- cor(df_cacpr_iri2$Diff.cacpr, df_cacpr_iri2$Diff.iri)^2
+
+print(R2Scatter)
+
+
+```
+
+# Merging Z Diff Score back into All
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=12, fig.height=8}
+
+merged_df_cacpr
+merged_df_iri
+
+# Only keep rowname, zDiff, and Differentiation 
+
+merged_df_cacpr2 <- merged_df_cacpr %>%
+  select(rowname, zDiff, Differentiation )
+
+rownames(merged_df_cacpr2) <- merged_df_cacpr2$rowname
+
+merged_df_cacpr2$rowname <- NULL
+
+
+merged_df_iri2 <- merged_df_iri %>%
+  select(rowname, zDiff, Differentiation )
+
+rownames(merged_df_iri2) <- merged_df_iri2$rowname
+
+merged_df_iri2$rowname <- NULL
+
+combined_df <- bind_rows(merged_df_cacpr2, merged_df_iri2)
+
+All <- AddMetaData(All, combined_df)
+
+head(All@meta.data)
+
+head(All@meta.data)
+
+VlnPlot(All, "zDiff", group.by = "subclass.All", split.by = "class.sample")
+
+# move rowname to be a rowname
+
+rownames(merged_df_cacpr2) <- merged_df_cacpr2$rowname
+
+head(All@meta.data)
+
+Idents(All) <- All@meta.data$class.sample
+All3 <- subset(All, idents = c("CACPR Sham", "IRI Sham", "CACPR", "IRI"), downsample = 5524)
+DimPlot(All3, group.by = "subclass.All", label = TRUE)
+DimPlot(All3, group.by = "Differentiation", split.by = "class.sample")
+FeaturePlot(All3, "zDiff", split.by = "class.sample")
+
+saveRDS(All, here("Output", "All_integrated_Scores.rds"))
+
+
+```
+
+# Damage markers score
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=12, fig.height=8}
+
+rm(list = ls())
+
+All <- readRDS(here("Output", "All_integrated_Scores.rds"))
+
+All@meta.data$class.sample <- factor(All@meta.data$class.sample, levels = c("CACPR Sham", "CACPR", "IRI Sham", "IRI"))
+
+Idents(All) <- All@meta.data$class.sample
+
+DimPlot(All)
+
+
+```
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=12, fig.height=8}
+
+
+DEGs <- FindMarkers(All, ident.1 = c("CACPR", "IRI"), min.pct = 0.25, logfc.threshold = .5, only.pos = TRUE)
+DEGs_list <- DEGs %>% arrange(desc(avg_log2FC))
+DEGs <- rownames(DEGs_list)
+DEGs <- DEGs %>% head(9)
+DEGs <- list(DEGs)
+print("Damage Markers")
+print(DEGs)
+SO2 <- AddModuleScore(All, features = DEGs, name = "Activation_Score")
+
+VlnPlot(SO2, "Activation_Score1", group.by = "class.sample")
+VlnPlot(SO2, "Activation_Score1", split.by = "class.sample", group.by = "class.All")
+
+Idents(SO2) <- SO2@meta.data$class.All
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=12, fig.height=8}
+
+
+df1a <- FetchData(object = SO2, vars = c("subclass.All", "class.sample", "Activation_Score1"))
+
+#Summarize df1a by calculating median for "Diff" grouped by "subclass.CACPR" and "class.sample"
+
+df1b <- df1a %>%
+  group_by(subclass.All, class.sample) %>%
+  summarize(median = median(Activation_Score1, na.rm = TRUE))
+
+# Create a new column that calculates the difference between the median of "Diff" for "CACPR" and "CACPR Sham" or "IRI" and "IRI Sham"
+
+# Separate df1b into two dataframes, one for class.sample = "CACPR" and "CACPR Sham" and one for class.sample = "IRI" and "IRI Sham"
+
+df1b_cacpr <- df1b[df1b$class.sample %in% c("CACPR", "CACPR Sham"), ]
+
+
+# Create a new column that calculates the difference between the median of "Diff" for "CACPR" and "Sham"
+
+df1b_cacpr <- df1b_cacpr %>%
+  mutate(Diff = ifelse(class.sample == "CACPR", (median - lag(median)), NA_real_))
+
+df1b_cacpr$subclass.All <- factor(df1b_cacpr$subclass.All, levels = df1b_cacpr$subclass.All[order(df1b_cacpr$Diff, na.last = NA)])
+
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=30, fig.height=6}
+
+# create a plot of Diff by subclass.All
+
+ggplot(df1b_cacpr, aes(x = subclass.All, y = Diff, fill = class.sample)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Subclass") +
+  ylab("Difference in median score") +
+  ggtitle("Difference in median score between CACPR and Sham")
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=30, fig.height=6}
+
+df1b_iri <- df1b[df1b$class.sample %in% c("IRI", "IRI Sham"), ]
+
+df1b_iri <- df1b_iri %>%
+  mutate(Diff = ifelse(class.sample == "IRI", (median - lag(median)), NA_real_))
+
+df1b_iri$subclass.All <- factor(df1b_iri$subclass.All, levels = df1b_iri$subclass.All[order(df1b_iri$Diff, na.last = NA)])
+
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=30, fig.height=6}
+
+# create a plot of Diff by subclass.All
+
+ggplot(df1b_iri, aes(x = subclass.All, y = Diff, fill = class.sample)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Subclass") +
+  ylab("Difference in median score") +
+  ggtitle("Difference in median score between IRI and Sham")
+
+```
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=30, fig.height=6}
+
+
+df5 <- df1a %>%
+  group_by(subclass.All, class.sample) %>%
+  summarize(
+    Median = median(Activation_Score1, na.rm = TRUE),
+    Mean = mean(Activation_Score1, na.rm = TRUE),
+    SD = sd(Activation_Score1, na.rm = TRUE)) 
+
+# Graph Mean grouped by class.All and class. sample
+
+ggplot(df5, aes(x = subclass.All, y = Mean, fill = class.sample)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Subclass") +
+  ylab("Mean score") +
+  ggtitle("Mean score by subclass and class.sample")
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=30, fig.height=6}
+
+
+df2a <- df1a %>%
+  group_by(subclass.All, class.sample) %>%
+  summarize(
+    Median = median(Activation_Score1, na.rm = TRUE),
+    Mean = mean(Activation_Score1, na.rm = TRUE),
+    SD = sd(Activation_Score1, na.rm = TRUE)) 
+
+# Healthy = mean +/- 2 SD
+# Injured = mean - 2-4 SD
+# Severe Injured = mean - 4-6 SD
+
+# Create a new Column called calculates Mean - 2 SD in df2a
+
+df2a <- df2a %>%
+  mutate(Healthy = Mean + 2 * SD,
+         SevereInjured = Mean + 4 * SD)
+
+# Only keep the rows in df2a that have a class.sample of "CACPR Sham"
+
+df2a_cacpr <- df2a[df2a$class.sample == "CACPR Sham", ]
+
+# Only keep the rows in df2a that have a class.sample of "IRI Sham"
+
+df2a_iri <- df2a[df2a$class.sample == "IRI Sham", ]
+
+
+# Split df1a into two dataframes, one for class.sample = "CACPR" and "CACPR Sham" and one for class.sample = "IRI" and "IRI Sham"
+
+df1a_cacpr <- df1a[df1a$class.sample %in% c("CACPR", "CACPR Sham"), ] %>% rownames_to_column()
+df1a_iri <- df1a[df1a$class.sample %in% c("IRI", "IRI Sham"), ] %>% rownames_to_column()
+
+# CACPR
+
+merged_df <- merge(df1a_cacpr, df2a_cacpr, by = "subclass.All", suffixes = c(".df1a", ".df2a"))
+
+# Calculate Z score
+
+merged_df <- merged_df %>%
+  mutate(zActivation_Score1 = (Activation_Score1 - Mean) / SD)
+
+merged_df <- merged_df %>%
+  mutate(Activation = case_when(
+    Activation_Score1 < Healthy ~ "Low",
+    Activation_Score1 >= Healthy & Activation_Score1 <= SevereInjured ~ "Medium",
+    Activation_Score1 > SevereInjured ~ "High"
+  ))
+
+merged_df$Activation <- factor(merged_df$Activation, levels = c("Low", "Medium", "High"))
+
+merged_df_cacpr <- merged_df
+
+# Summarize the number of cells in each Activation of "Activation" by subclass.All and then class.sample.df1a
+
+df2x <- merged_df %>%
+  group_by(subclass.All, class.sample.df1a, Activation) %>%
+  summarize(Count = n())
+
+# summarize as a percentage of the total number of cells in each subclass.All
+
+df2x <- df2x %>%
+  group_by(subclass.All, class.sample.df1a) %>%
+  mutate(Percentage = Count / sum(Count) * 100)
+
+# split df2x by class.sample.df1a to create two dataframes one for "CACPR Sham" and "CACPR" and another for "IRI Sham" and "IRI"
+
+df_cacpr <- df2x %>%
+  filter(grepl("CACPR", class.sample.df1a))
+
+df_cacpr_sham <- df2x %>%
+  filter(grepl("CACPR Sham", class.sample.df1a))
+
+# Create a graph of the percentage of cells in each Activation of "Activation" by subclass.All and then class.sample.df1a only for class.sample.df1a = "CACPR Sham" 
+
+ggplot(df_cacpr_sham, aes(x = subclass.All, y = Percentage, fill = Activation)) +
+  geom_bar(stat = "identity", position = "fill") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Subclass") +
+  ylab("Percentage of cells") +
+  ggtitle("Percentage of cells in each Activation by subclass and class.sample")
+
+
+df_cacpr <- df2x %>%
+  filter(grepl("CACPR", class.sample.df1a))
+
+# Create a graph of the percentage of cells in each Activation of "Activation" by subclass.All and then class.sample.df1a only for class.sample.df1a = "CACPR Sham" 
+
+ggplot(df_cacpr, aes(x = subclass.All, y = Percentage, fill = Activation)) +
+  geom_bar(stat = "identity", position = "fill") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Subclass") +
+  ylab("Percentage of cells") +
+  ggtitle("Percentage of cells in each Activation by subclass and class.sample")
+
+
+# IRI
+
+merged_df <- merge(df1a_iri, df2a_iri, by = "subclass.All", suffixes = c(".df1a", ".df2a"))
+
+# Calculate Z score
+
+merged_df <- merged_df %>%
+  mutate(zActivation_Score1 = (Activation_Score1 - Mean) / SD)
+
+merged_df <- merged_df %>%
+  mutate(Activation = case_when(
+    Activation_Score1 < Healthy ~ "Low",
+    Activation_Score1 >= Healthy & Activation_Score1 <= SevereInjured ~ "Medium",
+    Activation_Score1 > SevereInjured ~ "High"
+  ))
+
+merged_df$Activation <- factor(merged_df$Activation, levels = c("Low", "Medium", "High"))
+
+merged_df_iri <- merged_df
+
+save(merged_df_cacpr, merged_df_iri, file = "Activation_merged_df.RData")
+
+# Summarize the number of cells in each Activation of "Activation" by subclass.All and then class.sample.df1a
+
+df2x <- merged_df %>%
+  group_by(subclass.All, class.sample.df1a, Activation) %>%
+  summarize(Count = n())
+
+# summarize as a percentage of the total number of cells in each subclass.All
+
+df2x <- df2x %>%
+  group_by(subclass.All, class.sample.df1a) %>%
+  mutate(Percentage = Count / sum(Count) * 100)
+
+# split df2x by class.sample.df1a to create two dataframes one for "CACPR Sham" and "CACPR" and another for "IRI Sham" and "IRI"
+
+df_iri_sham <- df2x %>%
+  filter(grepl("IRI Sham", class.sample.df1a))
+
+# Create a graph of the percentage of cells in each Activation of "Activation" by subclass.All and then class.sample.df1a only for class.sample.df1a = "CACPR Sham" 
+
+ggplot(df_iri_sham, aes(x = subclass.All, y = Percentage, fill = Activation)) +
+  geom_bar(stat = "identity", position = "fill") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Subclass") +
+  ylab("Percentage of cells") +
+  ggtitle("Percentage of cells in each Activation by subclass and class.sample")
+
+
+df_iri <- df2x %>%
+  filter(grepl("IRI", class.sample.df1a))
+
+# Create a graph of the percentage of cells in each Activation of "Activation" by subclass.All and then class.sample.df1a only for class.sample.df1a = "CACPR Sham" 
+
+ggplot(df_iri, aes(x = subclass.All, y = Percentage, fill = Activation)) +
+  geom_bar(stat = "identity", position = "fill") +
+  theme_classic() +
+  theme(axis.line = element_line(size = 1, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Subclass") +
+  ylab("Percentage of cells") +
+  ggtitle("Percentage of cells in each Activation by subclass and class.sample")
+
+
+# Filter df_cacpr to only contain class.sample.df1a group "CACPR"
+
+df_cacpr2 <- df_cacpr %>%
+  filter(class.sample.df1a == "CACPR")
+
+df_iri2 <- df_iri %>%
+  filter(class.sample.df1a == "IRI")
+
+
+# Merge df_cacpr and df_iri by "subclass.All" and Activation
+
+df_cacpr_iri <- merge(df_cacpr2, df_iri2, by = c("subclass.All", "Activation"), suffixes = c(".CACPR", ".IRI"))
+
+```
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=10, fig.height=7}
+
+
+# Create a scatterplot of the percentage of cells in each Activation of "Activation" by subclass.All for "CACPR" and "IRI"
+
+ggplot(df_cacpr_iri, aes(x = Percentage.CACPR, y = Percentage.IRI, color = Activation)) +
+  geom_point() +
+  theme_classic() +
+  theme(axis.line = element_line(size = 2, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Percentage of cells in Activation by CACPR") +
+  ylab("Percentage of cells in Activation by IRI") +
+  ggtitle("Percentage of cells in each Activation by subclass and class.sample")
+
+# Calcualte the R2 value for the scatterplot
+
+R2Scatter <- cor(df_cacpr_iri$Percentage.CACPR, df_cacpr_iri$Percentage.IRI)^2
+
+print(R2Scatter)
+
+```
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=10, fig.height=7}
+
+ggplot(df_cacpr_iri, aes(x = Percentage.CACPR, y = Percentage.IRI, color = subclass.All)) +
+  geom_point() +
+  theme_classic() +
+  theme(axis.line = element_line(size = 2, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Percentage of cells in Activation by CACPR") +
+  ylab("Percentage of cells in Activation by IRI") +
+  ggtitle("Percentage of cells in each Activation by subclass and class.sample")
+
+
+
+```
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=10, fig.height=7}
+
+# Create a new column in df_cacpr_iri called "Activation_Score1" that adds the value of Percentage.CACPR for Activation = "Injured" and "Severe"
+
+df_cacpr_iri2 <- df_cacpr_iri %>%
+  group_by(subclass.All) %>%
+  mutate(Activation_Score1.cacpr = sum(Percentage.CACPR[Activation %in% c("Medium", "High")])) %>%
+  mutate(Activation_Score1.iri = sum(Percentage.IRI[Activation %in% c("Medium", "High")])) %>%
+  ungroup()
+
+
+df_cacpr_iri2
+
+ggplot(df_cacpr_iri2, aes(x = Activation_Score1.cacpr, y = Activation_Score1.iri, color = Activation)) +
+  geom_point() +
+  theme_classic() +
+  theme(axis.line = element_line(size = 2, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Percentage of cells in Activation by CACPR") +
+  ylab("Percentage of cells in Activation by IRI") +
+  ggtitle("Percentage of cells in each Activation by subclass and class.sample")
+
+ggplot(df_cacpr_iri2, aes(x = Activation_Score1.cacpr, y = Activation_Score1.iri, color = subclass.All)) +
+  geom_point() +
+  theme_classic() +
+  theme(axis.line = element_line(size = 2, colour = "black"),
+        text = element_text(size=20)) +
+  xlab("Percentage of cells in Activation by CACPR") +
+  ylab("Percentage of cells in Activation by IRI") +
+  ggtitle("Percentage of cells in each Activation by subclass and class.sample")
+
+R2Scatter <- cor(df_cacpr_iri2$Activation_Score1.cacpr, df_cacpr_iri2$Activation_Score1.iri)^2
+
+print(R2Scatter)
+
+
+```
+
+# Merging Z Activation_Score1 Score back into All
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=12, fig.height=8}
+
+merged_df_cacpr
+merged_df_iri
+
+# Only keep rowname, zActivation_Score1, and Activation
+
+merged_df_cacpr2 <- merged_df_cacpr %>%
+  select(rowname, zActivation_Score1, Activation)
+
+rownames(merged_df_cacpr2) <- merged_df_cacpr2$rowname
+
+merged_df_cacpr2$rowname <- NULL
+
+merged_df_iri2 <- merged_df_iri %>%
+  select(rowname, zActivation_Score1, Activation)
+
+rownames(merged_df_iri2) <- merged_df_iri2$rowname
+
+merged_df_iri2$rowname <- NULL
+
+# Combine merged_df_cacpr2 and merged_df_iri2 into the same dataframe
+
+combined_df <- bind_rows(merged_df_cacpr2, merged_df_iri2)
+
+All <- AddMetaData(All, combined_df)
+
+head(All@meta.data)
+
+VlnPlot(All, "zActivation_Score1", group.by = "subclass.All", split.by = "class.sample")
+
+# move rowname to be a rowname
+
+#rownames(merged_df_cacpr2) <- merged_df_cacpr2$rowname
+
+Idents(All) <- All@meta.data$class.sample
+All3 <- subset(All, idents = c("CACPR Sham", "IRI Sham", "CACPR", "IRI"), downsample = 5524)
+DimPlot(All3, group.by = "subclass.All", label = TRUE)
+DimPlot(All3, group.by = "Activation", split.by = "class.sample")
+FeaturePlot(All3, "zActivation_Score1", split.by = "class.sample")
+
+saveRDS(All, here("Output", "All_integrated_Scores.rds"))
+
+```
+
+
+# Session Info
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+sessionInfo()
+
+```
+
+
+  

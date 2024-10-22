@@ -1,0 +1,1092 @@
+---
+title: "KPMP dataset 3 PT Subset Correlation and GSEA"
+subtitle: "WashU-UCSD_HuBMAP_KPMP-Biopsy_10X-R_12032021.h5Seurat"
+author: "Xiao-Tong Su, Jonathan Nelson"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 4
+    toc_float: 
+      collapsed: false
+      smooth_scroll: false
+    number_sections: yes
+    theme: bootstrap
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r packages, echo=T, error=FALSE, message=FALSE, warning=FALSE}
+
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("SeuratDisk")) {install.packages("SeuratDisk"); require("SeuratDisk")}
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!requireNamespace('BiocManager', quietly = TRUE)) {install.packages('BiocManager'); require("BiocManager")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("paletteer")) {install.packages("paletteer"); require("paletteer")} # color palette
+if (!require("grDevices")) {install.packages("grDevices"); require("grDevices")} # for grDevices palette
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+if (!require("tibble")) {install.packages("tibble"); require("tibble")} # for table transformation
+if (!require("geneName")) {install.packages("geneName"); require("geneName")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("gghighlight")) {install.packages("gghighlight"); require("gghighlight")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("ggupset")) {install.packages("ggupset"); require("ggupset")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")}
+
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+
+if (!require("AnnotationHub")) {BiocManager::install('AnnotationHub'); require("AnnotationHub")}
+if (!require("org.Mm.eg.db")) {BiocManager::install('org.Mm.eg.db'); require("org.Mm.eg.db")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("here")) {install.packages("here"); require("here")}
+
+#if (!requireNamespace("remotes", quietly = TRUE)) {
+#  install.packages("remotes")
+#}
+#remotes::install_github("mojaveazure/seurat-disk")
+
+
+
+```
+
+# Load KPMP objects
+
+## Dataset
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center'}
+
+Sys.time()
+kpmp3 <- LoadH5Seurat(here("KPMP", "WashU-UCSD_HuBMAP_KPMP-Biopsy_10X-R_12032021.h5Seurat"))
+kpmp3
+head(kpmp3@meta.data)
+
+```
+
+## subclass.l2
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center', fig.height=6, fig.width=12}
+
+Sys.time()
+Idents(kpmp3) <- "subclass.l2"
+DimPlot(kpmp3, 
+        reduction = "umap", 
+        label = T,
+        label.size = 3,
+        repel = T, 
+        raster = F,
+        cols = paletteer_c("grDevices::Dynamic", n = 77)) #Rasterizing points since number of points exceeds 100,000. To disable this behavior set `raster=FALSE`
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center', fig.height=4, fig.width=18}
+
+VlnPlot(kpmp3, 
+        features = c("nCount_RNA", "nFeature_RNA", "percent.er", "percent.mt"),
+        stack = TRUE, 
+        flip = TRUE,
+        pt.size = 0,
+        fill.by = "ident") +
+  theme(legend.position = "none", 
+              plot.title = element_text(hjust = 0.5),
+              axis.text.x = element_text(angle = 45, hjust = .8),
+              axis.title.x = element_blank()) + 
+  stat_summary(fun = median,
+               geom = "crossbar",
+               width = 0.3,
+               size = 0.1,
+               position = position_dodge(width = 0.5))
+
+```
+
+## subclass.l1
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center', fig.height=6, fig.width=12}
+
+Idents(kpmp3) <- "subclass.l1"
+DimPlot(kpmp3, 
+        reduction = "umap", 
+        label = F,
+        label.size = 3,
+        repel = T, 
+        raster = F,
+)
+
+DimPlot(kpmp3, 
+        reduction = "umap", 
+        label = F,
+        label.size = 3,
+        repel = T, 
+        raster = F,
+        cells.highlight=WhichCells(kpmp3, idents = c("PT")),
+        cols.highlight = "#FF575B",
+        cols= "grey"
+)+
+  ggtitle("KPMP PT Cluster") + theme(plot.title = element_text(hjust = 0.5)) + NoLegend()
+
+
+
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center', fig.height=4, fig.width=18}
+
+VlnPlot(kpmp3, 
+        features = c("nCount_RNA", "nFeature_RNA", "percent.er", "percent.mt"),
+        stack = TRUE, 
+        flip = TRUE,
+        pt.size = 0,
+        fill.by = "ident") +
+  theme(legend.position = "none", 
+              plot.title = element_text(hjust = 0.5),
+              axis.text.x = element_text(angle = 45, hjust = .8),
+              axis.title.x = element_blank()) + 
+  stat_summary(fun = median,
+               geom = "crossbar",
+               width = 0.3,
+               size = 0.1,
+               position = position_dodge(width = 0.5))
+
+```
+
+## class
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center', fig.height=6, fig.width=12}
+
+Idents(kpmp3) <- "class"
+DimPlot(kpmp3, 
+        reduction = "umap", 
+        label = T,
+        label.size = 3,
+        repel = T, 
+        raster = F,
+        cols = paletteer_c("grDevices::Dynamic", n = 77)) #Rasterizing points since number of points exceeds 100,000. To disable this behavior set `raster=FALSE`
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center', fig.height=4, fig.width=18}
+
+VlnPlot(kpmp3, 
+        features = c("nCount_RNA", "nFeature_RNA", "percent.er", "percent.mt"),
+        stack = TRUE, 
+        flip = TRUE,
+        pt.size = 0,
+        fill.by = "ident") +
+  theme(legend.position = "none", 
+              plot.title = element_text(hjust = 0.5),
+              axis.text.x = element_text(angle = 45, hjust = .8),
+              axis.title.x = element_blank()) + 
+  stat_summary(fun = median,
+               geom = "crossbar",
+               width = 0.3,
+               size = 0.1,
+               position = position_dodge(width = 0.5))
+
+```
+
+## Add participants meta data
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center'}
+#Tissue source
+kpmp3@meta.data <- kpmp3@meta.data %>%
+                              mutate(tissue_source = dplyr::case_when(
+                                specimen_id == '18-142' ~ "KPMP Pilot",
+                                specimen_id == '18-162' ~ "KPMP Pilot",
+                                specimen_id == '18-312' ~ "KPMP Pilot",
+                                specimen_id == '3490' ~ "Tissue Interrogation Site",
+                                specimen_id == '3499' ~ "Tissue Interrogation Site",
+                                specimen_id == '3504' ~ "Tissue Interrogation Site",
+                                specimen_id == '3535' ~ "Tissue Interrogation Site",
+                                specimen_id == '3593' ~ "Tissue Interrogation Site",
+                                specimen_id == '3613' ~ "Tissue Interrogation Site",
+                                specimen_id == 'KRP446' ~ "Tissue Interrogation Site",
+                                specimen_id == 'KRP460' ~ "Tissue Interrogation Site",
+                                specimen_id == 'KRP461' ~ "Tissue Interrogation Site",
+                                specimen_id == 'KRP462' ~ "Tissue Interrogation Site",
+                                specimen_id == '30-10034' ~ "KPMP Recruitment Site",
+                                specimen_id == '32-10003' ~ "KPMP Recruitment Site",
+                                specimen_id == '32-10034' ~ "KPMP Recruitment Site",
+                                specimen_id == '32-2' ~ "KPMP Recruitment Site",
+                                specimen_id == '33-10005' ~ "KPMP Recruitment Site",
+                                specimen_id == '33-10006' ~ "KPMP Recruitment Site",
+                                specimen_id == '29-10006' ~ "KPMP Recruitment Site",
+                                specimen_id == '29-10008' ~ "KPMP Recruitment Site",
+                                specimen_id == '29-10010' ~ "KPMP Recruitment Site",
+                                specimen_id == '29-10012' ~ "KPMP Recruitment Site",
+                                specimen_id == '29-10013' ~ "KPMP Recruitment Site",
+                                specimen_id == '31-10000' ~ "KPMP Recruitment Site",
+                                specimen_id == '31-10001' ~ "KPMP Recruitment Site",
+                                specimen_id == '31-10006' ~ "KPMP Recruitment Site",
+                                specimen_id == '31-10013' ~ "KPMP Recruitment Site",
+                                specimen_id == '31-10035' ~ "KPMP Recruitment Site"
+                                ))
+#Protocol
+kpmp3@meta.data <- kpmp3@meta.data %>%
+                              mutate(protocol = dplyr::case_when(
+                                specimen_id == '18-142' ~ "KPMP Pilot 1 Protocol",
+                                specimen_id == '18-162' ~ "KPMP Pilot 1 Protocol",
+                                specimen_id == '18-312' ~ "KPMP Pilot 1 Protocol",
+                                specimen_id == '3490' ~ "Non-KPMP Protocol",
+                                specimen_id == '3499' ~ "Non-KPMP Protocol",
+                                specimen_id == '3504' ~ "Non-KPMP Protocol",
+                                specimen_id == '3535' ~ "Non-KPMP Protocol",
+                                specimen_id == '3593' ~ "Non-KPMP Protocol",
+                                specimen_id == '3613' ~ "Non-KPMP Protocol",
+                                specimen_id == 'KRP446' ~ "Non-KPMP Protocol",
+                                specimen_id == 'KRP460' ~ "Non-KPMP Protocol",
+                                specimen_id == 'KRP461' ~ "Non-KPMP Protocol",
+                                specimen_id == 'KRP462' ~ "Non-KPMP Protocol",
+                                specimen_id == '30-10034' ~ "KPMP Main Protocol",
+                                specimen_id == '32-10003' ~ "KPMP Main Protocol",
+                                specimen_id == '32-10034' ~ "KPMP Main Protocol",
+                                specimen_id == '32-2' ~ "KPMP Main Protocol",
+                                specimen_id == '33-10005' ~ "KPMP Main Protocol",
+                                specimen_id == '33-10006' ~ "KPMP Main Protocol",
+                                specimen_id == '29-10006' ~ "KPMP Main Protocol",
+                                specimen_id == '29-10008' ~ "KPMP Main Protocol",
+                                specimen_id == '29-10010' ~ "KPMP Main Protocol",
+                                specimen_id == '29-10012' ~ "KPMP Main Protocol",
+                                specimen_id == '29-10013' ~ "KPMP Main Protocol",
+                                specimen_id == '31-10000' ~ "KPMP Main Protocol",
+                                specimen_id == '31-10001' ~ "KPMP Main Protocol",
+                                specimen_id == '31-10006' ~ "KPMP Main Protocol",
+                                specimen_id == '31-10013' ~ "KPMP Main Protocol",
+                                specimen_id == '31-10035' ~ "KPMP Main Protocol"
+                                ))
+#Sample type
+kpmp3@meta.data <- kpmp3@meta.data %>%
+                              mutate(sample_type = dplyr::case_when(
+                                specimen_id == '18-142' ~ "Tumor Nephrectomy",
+                                specimen_id == '18-162' ~ "Tumor Nephrectomy",
+                                specimen_id == '18-312' ~ "Tumor Nephrectomy",
+                                specimen_id == '3490' ~ "Percutaneous Needle Biopsy",
+                                specimen_id == '3499' ~ "Deceased Donor Nephrectomy",
+                                specimen_id == '3504' ~ "Partial Tumor Nephrectomy",
+                                specimen_id == '3535' ~ "Total Tumor Nephrectomy",
+                                specimen_id == '3593' ~ "Deceased Donor Nephrectomy",
+                                specimen_id == '3613' ~ "Deceased Donor Nephrectomy",
+                                specimen_id == 'KRP446' ~ "Intra-operative Biopsy",
+                                specimen_id == 'KRP460' ~ "Intra-operative Biopsy",
+                                specimen_id == 'KRP461' ~ "Intra-operative Biopsy",
+                                specimen_id == 'KRP462' ~ "Intra-operative Biopsy",
+                                specimen_id == '30-10034' ~ "Percutaneous Needle Biopsy",
+                                specimen_id == '32-10003' ~ "Percutaneous Needle Biopsy",
+                                specimen_id == '32-10034' ~ "Percutaneous Needle Biopsy",
+                                specimen_id == '32-2' ~ "Percutaneous Needle Biopsy",
+                                specimen_id == '33-10005' ~ "Percutaneous Needle Biopsy",
+                                specimen_id == '33-10006' ~ "Percutaneous Needle Biopsy",
+                                specimen_id == '29-10006' ~ "Percutaneous Needle Biopsy",
+                                specimen_id == '29-10008' ~ "Percutaneous Needle Biopsy",
+                                specimen_id == '29-10010' ~ "Percutaneous Needle Biopsy",
+                                specimen_id == '29-10012' ~ "Percutaneous Needle Biopsy",
+                                specimen_id == '29-10013' ~ "Percutaneous Needle Biopsy",
+                                specimen_id == '31-10000' ~ "Percutaneous Needle Biopsy",
+                                specimen_id == '31-10001' ~ "Percutaneous Needle Biopsy",
+                                specimen_id == '31-10006' ~ "Percutaneous Needle Biopsy",
+                                specimen_id == '31-10013' ~ "Percutaneous Needle Biopsy",
+                                specimen_id == '31-10035' ~ "Percutaneous Needle Biopsy"
+                                ))
+#Sex
+kpmp3@meta.data <- kpmp3@meta.data %>%
+                              mutate(sex = dplyr::case_when(
+                                specimen_id == '18-142' ~ "Female",
+                                specimen_id == '18-162' ~ "Female",
+                                specimen_id == '18-312' ~ "Male",
+                                specimen_id == '3490' ~ "Female",
+                                specimen_id == '3499' ~ "Female",
+                                specimen_id == '3504' ~ "Female",
+                                specimen_id == '3535' ~ "Male",
+                                specimen_id == '3593' ~ "Male",
+                                specimen_id == '3613' ~ "Female",
+                                specimen_id == 'KRP446' ~ "Male",
+                                specimen_id == 'KRP460' ~ "Female",
+                                specimen_id == 'KRP461' ~ "Male",
+                                specimen_id == 'KRP462' ~ "Female",
+                                specimen_id == '30-10034' ~ "Female",
+                                specimen_id == '32-10003' ~ "Male",
+                                specimen_id == '32-10034' ~ "Male",
+                                specimen_id == '32-2' ~ "Male",
+                                specimen_id == '33-10005' ~ "Male",
+                                specimen_id == '33-10006' ~ "Male",
+                                specimen_id == '29-10006' ~ "Female",
+                                specimen_id == '29-10008' ~ "Female",
+                                specimen_id == '29-10010' ~ "Male",
+                                specimen_id == '29-10012' ~ "Female",
+                                specimen_id == '29-10013' ~ "Female",
+                                specimen_id == '31-10000' ~ "Male",
+                                specimen_id == '31-10001' ~ "Male",
+                                specimen_id == '31-10006' ~ "Male",
+                                specimen_id == '31-10013' ~ "Male",
+                                specimen_id == '31-10035' ~ "Female"
+                                ))
+#Age
+kpmp3@meta.data <- kpmp3@meta.data %>%
+                              mutate(age = dplyr::case_when(
+                                specimen_id == '18-142' ~ "60-69",
+                                specimen_id == '18-162' ~ "60-69",
+                                specimen_id == '18-312' ~ "70-79",
+                                specimen_id == '3490' ~ "",
+                                specimen_id == '3499' ~ "",
+                                specimen_id == '3504' ~ "",
+                                specimen_id == '3535' ~ "",
+                                specimen_id == '3593' ~ "",
+                                specimen_id == '3613' ~ "",
+                                specimen_id == 'KRP446' ~ "",
+                                specimen_id == 'KRP460' ~ "",
+                                specimen_id == 'KRP461' ~ "",
+                                specimen_id == 'KRP462' ~ "",
+                                specimen_id == '30-10034' ~ "70-79",
+                                specimen_id == '32-10003' ~ "30-39",
+                                specimen_id == '32-10034' ~ "60-69",
+                                specimen_id == '32-2' ~ "60-69",
+                                specimen_id == '33-10005' ~ "60-69",
+                                specimen_id == '33-10006' ~ "20-29",
+                                specimen_id == '29-10006' ~ "60-69",
+                                specimen_id == '29-10008' ~ "60-69",
+                                specimen_id == '29-10010' ~ "70-79",
+                                specimen_id == '29-10012' ~ "50-59",
+                                specimen_id == '29-10013' ~ "60-69",
+                                specimen_id == '31-10000' ~ "50-59",
+                                specimen_id == '31-10001' ~ "70-79",
+                                specimen_id == '31-10006' ~ "60-69",
+                                specimen_id == '31-10013' ~ "60-69",
+                                specimen_id == '31-10035' ~ "70-79"
+                                ))
+#Race
+kpmp3@meta.data <- kpmp3@meta.data %>%
+                              mutate(race = dplyr::case_when(
+                                specimen_id == '18-142' ~ "",
+                                specimen_id == '18-162' ~ "",
+                                specimen_id == '18-312' ~ "",
+                                specimen_id == '3490' ~ "White",
+                                specimen_id == '3499' ~ "White",
+                                specimen_id == '3504' ~ "White",
+                                specimen_id == '3535' ~ "White",
+                                specimen_id == '3593' ~ "White",
+                                specimen_id == '3613' ~ "White",
+                                specimen_id == 'KRP446' ~ "White",
+                                specimen_id == 'KRP460' ~ "White",
+                                specimen_id == 'KRP461' ~ "White",
+                                specimen_id == 'KRP462' ~ "White",
+                                specimen_id == '30-10034' ~ "Black or African-American",
+                                specimen_id == '32-10003' ~ "White",
+                                specimen_id == '32-10034' ~ "White",
+                                specimen_id == '32-2' ~ "White",
+                                specimen_id == '33-10005' ~ "White",
+                                specimen_id == '33-10006' ~ "White",
+                                specimen_id == '29-10006' ~ "Black or African-American",
+                                specimen_id == '29-10008' ~ "White",
+                                specimen_id == '29-10010' ~ "Asian",
+                                specimen_id == '29-10012' ~ "Black or African-American",
+                                specimen_id == '29-10013' ~ "Black or African-American",
+                                specimen_id == '31-10000' ~ "White",
+                                specimen_id == '31-10001' ~ "White",
+                                specimen_id == '31-10006' ~ "White",
+                                specimen_id == '31-10013' ~ "White",
+                                specimen_id == '31-10035' ~ "White"
+                                ))
+#KDIGO Stage
+kpmp3@meta.data <- kpmp3@meta.data %>%
+                              mutate(KDIGO_stage = dplyr::case_when(
+                                specimen_id == '18-142' ~ "",
+                                specimen_id == '18-162' ~ "",
+                                specimen_id == '18-312' ~ "",
+                                specimen_id == '3490' ~ "",
+                                specimen_id == '3499' ~ "",
+                                specimen_id == '3504' ~ "",
+                                specimen_id == '3535' ~ "",
+                                specimen_id == '3593' ~ "",
+                                specimen_id == '3613' ~ "",
+                                specimen_id == 'KRP446' ~ "",
+                                specimen_id == 'KRP460' ~ "",
+                                specimen_id == 'KRP461' ~ "",
+                                specimen_id == 'KRP462' ~ "",
+                                specimen_id == '30-10034' ~ "Stage 2",
+                                specimen_id == '32-10003' ~ "Stage 2",
+                                specimen_id == '32-10034' ~ "Stage 2",
+                                specimen_id == '32-2' ~ "Stage 3",
+                                specimen_id == '33-10005' ~ "Stage 3",
+                                specimen_id == '33-10006' ~ "Stage 3",
+                                specimen_id == '29-10006' ~ "",
+                                specimen_id == '29-10008' ~ "",
+                                specimen_id == '29-10010' ~ "",
+                                specimen_id == '29-10012' ~ "",
+                                specimen_id == '29-10013' ~ "",
+                                specimen_id == '31-10000' ~ "",
+                                specimen_id == '31-10001' ~ "",
+                                specimen_id == '31-10006' ~ "",
+                                specimen_id == '31-10013' ~ "",
+                                specimen_id == '31-10035' ~ ""
+                                ))
+#Baseline eGFR
+kpmp3@meta.data <- kpmp3@meta.data %>%
+                              mutate(baseline_eGFR = dplyr::case_when(
+                                specimen_id == '18-142' ~ "",
+                                specimen_id == '18-162' ~ "",
+                                specimen_id == '18-312' ~ "",
+                                specimen_id == '3490' ~ "",
+                                specimen_id == '3499' ~ "",
+                                specimen_id == '3504' ~ "",
+                                specimen_id == '3535' ~ "",
+                                specimen_id == '3593' ~ "",
+                                specimen_id == '3613' ~ "",
+                                specimen_id == 'KRP446' ~ "",
+                                specimen_id == 'KRP460' ~ "",
+                                specimen_id == 'KRP461' ~ "",
+                                specimen_id == 'KRP462' ~ "",
+                                specimen_id == '30-10034' ~ "30-39",
+                                specimen_id == '32-10003' ~ "60-69",
+                                specimen_id == '32-10034' ~ "50-59",
+                                specimen_id == '32-2' ~ "50-59",
+                                specimen_id == '33-10005' ~ "50-59",
+                                specimen_id == '33-10006' ~ "60-69",
+                                specimen_id == '29-10006' ~ "70-79",
+                                specimen_id == '29-10008' ~ "40-49",
+                                specimen_id == '29-10010' ~ "40-49",
+                                specimen_id == '29-10012' ~ "30-39",
+                                specimen_id == '29-10013' ~ "100-109",
+                                specimen_id == '31-10000' ~ "20-29",
+                                specimen_id == '31-10001' ~ "40-49",
+                                specimen_id == '31-10006' ~ "50-59",
+                                specimen_id == '31-10013' ~ "50-59",
+                                specimen_id == '31-10035' ~ "60-69"
+                                ))
+#Diabetes history
+kpmp3@meta.data <- kpmp3@meta.data %>%
+                              mutate(diabetes_history = dplyr::case_when(
+                                specimen_id == '18-142' ~ "",
+                                specimen_id == '18-162' ~ "",
+                                specimen_id == '18-312' ~ "",
+                                specimen_id == '3490' ~ "",
+                                specimen_id == '3499' ~ "",
+                                specimen_id == '3504' ~ "",
+                                specimen_id == '3535' ~ "",
+                                specimen_id == '3593' ~ "",
+                                specimen_id == '3613' ~ "",
+                                specimen_id == 'KRP446' ~ "",
+                                specimen_id == 'KRP460' ~ "",
+                                specimen_id == 'KRP461' ~ "",
+                                specimen_id == 'KRP462' ~ "",
+                                specimen_id == '30-10034' ~ "Yes",
+                                specimen_id == '32-10003' ~ "No",
+                                specimen_id == '32-10034' ~ "Yes",
+                                specimen_id == '32-2' ~ "Yes",
+                                specimen_id == '33-10005' ~ "No",
+                                specimen_id == '33-10006' ~ "No",
+                                specimen_id == '29-10006' ~ "Yes",
+                                specimen_id == '29-10008' ~ "No",
+                                specimen_id == '29-10010' ~ "Yes",
+                                specimen_id == '29-10012' ~ "Yes",
+                                specimen_id == '29-10013' ~ "Yes",
+                                specimen_id == '31-10000' ~ "No",
+                                specimen_id == '31-10001' ~ "Yes",
+                                specimen_id == '31-10006' ~ "No",
+                                specimen_id == '31-10013' ~ "Yes",
+                                specimen_id == '31-10035' ~ "Yes"
+                                ))
+#Diabetes duration
+kpmp3@meta.data <- kpmp3@meta.data %>%
+                              mutate(diabetes_duration_years = dplyr::case_when(
+                                specimen_id == '18-142' ~ "",
+                                specimen_id == '18-162' ~ "",
+                                specimen_id == '18-312' ~ "",
+                                specimen_id == '3490' ~ "",
+                                specimen_id == '3499' ~ "",
+                                specimen_id == '3504' ~ "",
+                                specimen_id == '3535' ~ "",
+                                specimen_id == '3593' ~ "",
+                                specimen_id == '3613' ~ "",
+                                specimen_id == 'KRP446' ~ "",
+                                specimen_id == 'KRP460' ~ "",
+                                specimen_id == 'KRP461' ~ "",
+                                specimen_id == 'KRP462' ~ "",
+                                specimen_id == '30-10034' ~ "",
+                                specimen_id == '32-10003' ~ "",
+                                specimen_id == '32-10034' ~ "10-14",
+                                specimen_id == '32-2' ~ "0-4",
+                                specimen_id == '33-10005' ~ "",
+                                specimen_id == '33-10006' ~ "",
+                                specimen_id == '29-10006' ~ "5-9",
+                                specimen_id == '29-10008' ~ "",
+                                specimen_id == '29-10010' ~ "10-14",
+                                specimen_id == '29-10012' ~ "10-14",
+                                specimen_id == '29-10013' ~ "5-9",
+                                specimen_id == '31-10000' ~ "",
+                                specimen_id == '31-10001' ~ "25-29",
+                                specimen_id == '31-10006' ~ "",
+                                specimen_id == '31-10013' ~ "0-4",
+                                specimen_id == '31-10035' ~ "10-14"
+                                ))
+#Hypertension history
+kpmp3@meta.data <- kpmp3@meta.data %>%
+                              mutate(hypertension_history = dplyr::case_when(
+                                specimen_id == '18-142' ~ "",
+                                specimen_id == '18-162' ~ "",
+                                specimen_id == '18-312' ~ "",
+                                specimen_id == '3490' ~ "",
+                                specimen_id == '3499' ~ "",
+                                specimen_id == '3504' ~ "",
+                                specimen_id == '3535' ~ "",
+                                specimen_id == '3593' ~ "",
+                                specimen_id == '3613' ~ "",
+                                specimen_id == 'KRP446' ~ "",
+                                specimen_id == 'KRP460' ~ "",
+                                specimen_id == 'KRP461' ~ "",
+                                specimen_id == 'KRP462' ~ "",
+                                specimen_id == '30-10034' ~ "Yes",
+                                specimen_id == '32-10003' ~ "No",
+                                specimen_id == '32-10034' ~ "No",
+                                specimen_id == '32-2' ~ "Yes",
+                                specimen_id == '33-10005' ~ "Yes",
+                                specimen_id == '33-10006' ~ "Yes",
+                                specimen_id == '29-10006' ~ "Yes",
+                                specimen_id == '29-10008' ~ "Yes",
+                                specimen_id == '29-10010' ~ "Yes",
+                                specimen_id == '29-10012' ~ "Yes",
+                                specimen_id == '29-10013' ~ "Yes",
+                                specimen_id == '31-10000' ~ "Yes",
+                                specimen_id == '31-10001' ~ "Yes",
+                                specimen_id == '31-10006' ~ "Yes",
+                                specimen_id == '31-10013' ~ "Yes",
+                                specimen_id == '31-10035' ~ "Yes"
+                                ))
+#Hypertension duration
+kpmp3@meta.data <- kpmp3@meta.data %>%
+                              mutate(hypertension_duration_years = dplyr::case_when(
+                                specimen_id == '18-142' ~ "",
+                                specimen_id == '18-162' ~ "",
+                                specimen_id == '18-312' ~ "",
+                                specimen_id == '3490' ~ "",
+                                specimen_id == '3499' ~ "",
+                                specimen_id == '3504' ~ "",
+                                specimen_id == '3535' ~ "",
+                                specimen_id == '3593' ~ "",
+                                specimen_id == '3613' ~ "",
+                                specimen_id == 'KRP446' ~ "",
+                                specimen_id == 'KRP460' ~ "",
+                                specimen_id == 'KRP461' ~ "",
+                                specimen_id == 'KRP462' ~ "",
+                                specimen_id == '30-10034' ~ "",
+                                specimen_id == '32-10003' ~ "",
+                                specimen_id == '32-10034' ~ "",
+                                specimen_id == '32-2' ~ "0-4",
+                                specimen_id == '33-10005' ~ "",
+                                specimen_id == '33-10006' ~ "",
+                                specimen_id == '29-10006' ~ "30-34",
+                                specimen_id == '29-10008' ~ "0-4",
+                                specimen_id == '29-10010' ~ "0-4",
+                                specimen_id == '29-10012' ~ "10-14",
+                                specimen_id == '29-10013' ~ "20-24",
+                                specimen_id == '31-10000' ~ "15-19",
+                                specimen_id == '31-10001' ~ "25-29",
+                                specimen_id == '31-10006' ~ "5-9",
+                                specimen_id == '31-10013' ~ "10-14",
+                                specimen_id == '31-10035' ~ "10-14"
+                                ))
+#On RAS blockade
+kpmp3@meta.data <- kpmp3@meta.data %>%
+                              mutate(RAAS_blockade = dplyr::case_when(
+                                specimen_id == '18-142' ~ "",
+                                specimen_id == '18-162' ~ "",
+                                specimen_id == '18-312' ~ "",
+                                specimen_id == '3490' ~ "",
+                                specimen_id == '3499' ~ "",
+                                specimen_id == '3504' ~ "",
+                                specimen_id == '3535' ~ "",
+                                specimen_id == '3593' ~ "",
+                                specimen_id == '3613' ~ "",
+                                specimen_id == 'KRP446' ~ "",
+                                specimen_id == 'KRP460' ~ "",
+                                specimen_id == 'KRP461' ~ "",
+                                specimen_id == 'KRP462' ~ "",
+                                specimen_id == '30-10034' ~ "No",
+                                specimen_id == '32-10003' ~ "No",
+                                specimen_id == '32-10034' ~ "No",
+                                specimen_id == '32-2' ~ "No",
+                                specimen_id == '33-10005' ~ "Yes",
+                                specimen_id == '33-10006' ~ "Yes",
+                                specimen_id == '29-10006' ~ "Yes",
+                                specimen_id == '29-10008' ~ "No",
+                                specimen_id == '29-10010' ~ "No",
+                                specimen_id == '29-10012' ~ "No",
+                                specimen_id == '29-10013' ~ "Yes",
+                                specimen_id == '31-10000' ~ "Yes",
+                                specimen_id == '31-10001' ~ "Yes",
+                                specimen_id == '31-10006' ~ "No",
+                                specimen_id == '31-10013' ~ "Yes",
+                                specimen_id == '31-10035' ~ "Yes"
+                                ))
+#Proteinuria
+kpmp3@meta.data <- kpmp3@meta.data %>%
+                              mutate(proteinuria = dplyr::case_when(
+                                specimen_id == '18-142' ~ "",
+                                specimen_id == '18-162' ~ "",
+                                specimen_id == '18-312' ~ "",
+                                specimen_id == '3490' ~ "",
+                                specimen_id == '3499' ~ "",
+                                specimen_id == '3504' ~ "",
+                                specimen_id == '3535' ~ "",
+                                specimen_id == '3593' ~ "",
+                                specimen_id == '3613' ~ "",
+                                specimen_id == 'KRP446' ~ "",
+                                specimen_id == 'KRP460' ~ "",
+                                specimen_id == 'KRP461' ~ "",
+                                specimen_id == 'KRP462' ~ "",
+                                specimen_id == '30-10034' ~ ">=1000 mg/g cr",
+                                specimen_id == '32-10003' ~ "150 to <500 mg/g cr",
+                                specimen_id == '32-10034' ~ "<150 mg/g cr",
+                                specimen_id == '32-2' ~ "",
+                                specimen_id == '33-10005' ~ "",
+                                specimen_id == '33-10006' ~ "",
+                                specimen_id == '29-10006' ~ "500 to <1000 mg/g cr",
+                                specimen_id == '29-10008' ~ "",
+                                specimen_id == '29-10010' ~ "",
+                                specimen_id == '29-10012' ~ ">=1000 mg/g cr",
+                                specimen_id == '29-10013' ~ "<150 mg/g cr",
+                                specimen_id == '31-10000' ~ "",
+                                specimen_id == '31-10001' ~ "150 to <500 mg/g cr",
+                                specimen_id == '31-10006' ~ "",
+                                specimen_id == '31-10013' ~ "<150 mg/g cr",
+                                specimen_id == '31-10035' ~ ">=1000 mg/g cr"
+                                ))
+#A1c
+kpmp3@meta.data <- kpmp3@meta.data %>%
+                              mutate(A1c = dplyr::case_when(
+                                specimen_id == '18-142' ~ "",
+                                specimen_id == '18-162' ~ "",
+                                specimen_id == '18-312' ~ "",
+                                specimen_id == '3490' ~ "",
+                                specimen_id == '3499' ~ "",
+                                specimen_id == '3504' ~ "",
+                                specimen_id == '3535' ~ "",
+                                specimen_id == '3593' ~ "",
+                                specimen_id == '3613' ~ "",
+                                specimen_id == 'KRP446' ~ "",
+                                specimen_id == 'KRP460' ~ "",
+                                specimen_id == 'KRP461' ~ "",
+                                specimen_id == 'KRP462' ~ "",
+                                specimen_id == '30-10034' ~ "6.5 to <7.5%",
+                                specimen_id == '32-10003' ~ "",
+                                specimen_id == '32-10034' ~ ">=8.5%",
+                                specimen_id == '32-2' ~ "<6.5%",
+                                specimen_id == '33-10005' ~ "",
+                                specimen_id == '33-10006' ~ "",
+                                specimen_id == '29-10006' ~ "",
+                                specimen_id == '29-10008' ~ "",
+                                specimen_id == '29-10010' ~ "",
+                                specimen_id == '29-10012' ~ "",
+                                specimen_id == '29-10013' ~ "6.5 to <7.5%",
+                                specimen_id == '31-10000' ~ "<6.5%",
+                                specimen_id == '31-10001' ~ "6.5 to <7.5%",
+                                specimen_id == '31-10006' ~ "<6.5%",
+                                specimen_id == '31-10013' ~ "<6.5%",
+                                specimen_id == '31-10035' ~ "6.5 to <7.5%"
+                                ))
+#Albuminuria
+kpmp3@meta.data <- kpmp3@meta.data %>%
+                              mutate(albuminuria = dplyr::case_when(
+                                specimen_id == '18-142' ~ "",
+                                specimen_id == '18-162' ~ "",
+                                specimen_id == '18-312' ~ "",
+                                specimen_id == '3490' ~ "",
+                                specimen_id == '3499' ~ "",
+                                specimen_id == '3504' ~ "",
+                                specimen_id == '3535' ~ "",
+                                specimen_id == '3593' ~ "",
+                                specimen_id == '3613' ~ "",
+                                specimen_id == 'KRP446' ~ "",
+                                specimen_id == 'KRP460' ~ "",
+                                specimen_id == 'KRP461' ~ "",
+                                specimen_id == 'KRP462' ~ "",
+                                specimen_id == '30-10034' ~ ">=1000 mg/g cr",
+                                specimen_id == '32-10003' ~ "",
+                                specimen_id == '32-10034' ~ "",
+                                specimen_id == '32-2' ~ "",
+                                specimen_id == '33-10005' ~ "",
+                                specimen_id == '33-10006' ~ "",
+                                specimen_id == '29-10006' ~ "",
+                                specimen_id == '29-10008' ~ "30 to <300 mg/g cr",
+                                specimen_id == '29-10010' ~ "",
+                                specimen_id == '29-10012' ~ "",
+                                specimen_id == '29-10013' ~ "30 to <300 mg/g cr",
+                                specimen_id == '31-10000' ~ "",
+                                specimen_id == '31-10001' ~ "<30 mg/g cr",
+                                specimen_id == '31-10006' ~ "",
+                                specimen_id == '31-10013' ~ "",
+                                specimen_id == '31-10035' ~ ""
+                                ))
+#Disease
+kpmp3@meta.data <- kpmp3@meta.data %>%
+                              mutate(disease_type = dplyr::case_when(
+                                specimen_id == '18-142' ~ "Healthy Reference",
+                                specimen_id == '18-162' ~ "Healthy Reference",
+                                specimen_id == '18-312' ~ "Healthy Reference",
+                                specimen_id == '3490' ~ "Healthy Reference",
+                                specimen_id == '3499' ~ "Healthy Reference",
+                                specimen_id == '3504' ~ "Healthy Reference",
+                                specimen_id == '3535' ~ "Healthy Reference",
+                                specimen_id == '3593' ~ "Healthy Reference",
+                                specimen_id == '3613' ~ "Healthy Reference",
+                                specimen_id == 'KRP446' ~ "Healthy Reference",
+                                specimen_id == 'KRP460' ~ "Healthy Reference",
+                                specimen_id == 'KRP461' ~ "Healthy Reference",
+                                specimen_id == 'KRP462' ~ "Healthy Reference",
+                                specimen_id == '30-10034' ~ "AKI",
+                                specimen_id == '32-10003' ~ "AKI",
+                                specimen_id == '32-10034' ~ "AKI",
+                                specimen_id == '32-2' ~ "AKI",
+                                specimen_id == '33-10005' ~ "AKI",
+                                specimen_id == '33-10006' ~ "AKI",
+                                specimen_id == '29-10006' ~ "CKD",
+                                specimen_id == '29-10008' ~ "CKD",
+                                specimen_id == '29-10010' ~ "CKD",
+                                specimen_id == '29-10012' ~ "CKD",
+                                specimen_id == '29-10013' ~ "CKD",
+                                specimen_id == '31-10000' ~ "CKD",
+                                specimen_id == '31-10001' ~ "CKD",
+                                specimen_id == '31-10006' ~ "CKD",
+                                specimen_id == '31-10013' ~ "CKD",
+                                specimen_id == '31-10035' ~ "CKD"
+                                ))
+#Replicates
+kpmp3@meta.data <- kpmp3@meta.data %>%
+                              mutate(Rep = dplyr::case_when(
+                                specimen_id == '18-142' ~ "HR_1",
+                                specimen_id == '18-162' ~ "HR_2",
+                                specimen_id == '18-312' ~ "HR_3",
+                                specimen_id == '3490' ~ "HR_4",
+                                specimen_id == '3499' ~ "HR_5",
+                                specimen_id == '3504' ~ "HR_6",
+                                specimen_id == '3535' ~ "HR_7",
+                                specimen_id == '3593' ~ "HR_8",
+                                specimen_id == '3613' ~ "HR_9",
+                                specimen_id == 'KRP446' ~ "HR_10",
+                                specimen_id == 'KRP460' ~ "HR_11",
+                                specimen_id == 'KRP461' ~ "HR_12",
+                                specimen_id == 'KRP462' ~ "HR_13",
+                                specimen_id == '30-10034' ~ "AKI_1",
+                                specimen_id == '32-10003' ~ "AKI_2",
+                                specimen_id == '32-10034' ~ "AKI_3",
+                                specimen_id == '32-2' ~ "AKI_4",
+                                specimen_id == '33-10005' ~ "AKI_5",
+                                specimen_id == '33-10006' ~ "AKI_6",
+                                specimen_id == '29-10006' ~ "CKD_1",
+                                specimen_id == '29-10008' ~ "CKD_2",
+                                specimen_id == '29-10010' ~ "CKD_3",
+                                specimen_id == '29-10012' ~ "CKD_4",
+                                specimen_id == '29-10013' ~ "CKD_5",
+                                specimen_id == '31-10000' ~ "CKD_6",
+                                specimen_id == '31-10001' ~ "CKD_7",
+                                specimen_id == '31-10006' ~ "CKD_8",
+                                specimen_id == '31-10013' ~ "CKD_9",
+                                specimen_id == '31-10035' ~ "CKD_10"
+                                ))
+
+head(kpmp3@meta.data)
+
+```
+
+## Subset KPMP PT Cells
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center'}
+
+KPMP.PT <- subset(x = kpmp3, subset = subclass.l1 == "PT")
+
+DimPlot(KPMP.PT, 
+        reduction = "umap", 
+        label = T,
+        label.size = 3,
+        repel = T, 
+        raster = F,
+        group.by = "subclass.l2")
+
+DimPlot(KPMP.PT, 
+        reduction = "umap", 
+        label = T,
+        label.size = 3,
+        repel = T, 
+        raster = F,
+        group.by = "disease_type") 
+
+
+markers.to.plot1 <- c("LRP2",         # Pan PT
+                      "SLC5A12",
+                      "SLC13A3",
+                      "SLC16A9",
+                      "TOP2A"
+                      )
+
+Idents(object = KPMP.PT) <- "subclass.l2"
+
+my_levels.PT <- c("PT-S1", "PT-S2", "PT-S3", "cycPT", "aPT", "dPT", "dPT/DTL")
+Idents(KPMP.PT) <- factor(Idents(KPMP.PT), levels= my_levels.PT)
+
+VlnPlot(KPMP.PT, 
+        features = markers.to.plot1,
+        stack = TRUE,
+        fill.by = "ident",
+        flip = T,
+              )
+
+table(Idents(KPMP.PT), KPMP.PT$disease_type)
+prop.table(table(Idents(KPMP.PT), KPMP.PT$disease_type))
+
+#saveRDS(KPMP.PT, here("KPMP", "KPMP.PT.rds"))
+
+```
+
+# DEG Analysis for AKI
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center', fig.width=12, fig.height=6}
+KPMP.PT <- readRDS(here("Output", "KPMP.PT.rds"))
+
+Idents(object = KPMP.PT) <- "subclass.l1"
+
+#Idents(object = KPMP.PT)
+
+KPMP.AKIintegrated.PT <- FindMarkers(KPMP.PT, ident.1 = "AKI" , ident.2 = "Healthy Reference", group.by = "disease_type", subset.ident = c("PT"))
+DEGs <- KPMP.AKIintegrated.PT
+DEGs <- DEGs %>% rownames_to_column("gene") %>% filter(p_val < .05)
+DEGs <- DEGs[order(DEGs[,"avg_log2FC"], decreasing = TRUE),]
+
+write.xlsx(DEGs, sheetName = "KPMP.AKIintegrated.PT", file = here("Outputs", "KPMP AKI PT DEGs.xlsx"))
+
+save(DEGs, file = here("Output", "KPMP.AKIintegrated.PT2.RData"))
+
+#KPMP.PT <- readRDS(here("KPMP", "KPMP.PT.rds"))
+
+```
+
+# DEG Analysis for CKD
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center', fig.width=12, fig.height=6}
+
+KPMP.PT <- readRDS(here("Output", "KPMP.PT.rds"))
+
+Idents(object = KPMP.PT) <- "subclass.l1"
+
+#Idents(object = KPMP.PT)
+
+KPMP.CKDintegrated.PT <- FindMarkers(KPMP.PT, ident.1 = "CKD" , ident.2 = "Healthy Reference", group.by = "disease_type", subset.ident = c("PT"))
+DEGs <- KPMP.CKDintegrated.PT 
+DEGs <- DEGs %>% rownames_to_column("gene") %>% filter(p_val < .05)
+DEGs <- DEGs[order(DEGs[,"avg_log2FC"], decreasing = TRUE),]
+
+write.xlsx(DEGs, sheetName = "KPMP.CKDintegrated.PT", file = here("Output", "KPMP CKD PT DEGs.xlsx"))
+
+save(DEGs, file = here("Output", "KPMP.CKDintegrated.PT2.RData"))
+
+#KPMP.PT <- readRDS(here("KPMP", "KPMP.PT.rds"))
+
+```
+
+## CACPR vs. KPMP DEGs
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center', fig.width=12, fig.height=6}
+ 
+load(here("Outputs", "CACPR Cluster Condition DEGs.RData"))
+load(here("Outputs", "IRI Cluster Condition DEGs.RData"))
+
+load(here("KPMP","KPMP.AKIintegrated.PT.RData"))
+
+x.markers <- CACPRintegrated.PT
+
+x.markers_tb <- x.markers %>% data.frame() %>% filter(p_val_adj < 0.05) %>%  as_tibble()
+
+top6 <- list(head(x.markers_tb$gene))
+
+x.markers_tb_H <- mousegnameConverter(x.markers_tb, "gene")
+
+x.markers_tb_H = x.markers_tb_H[order(x.markers_tb_H[,"avg_log2FC"], decreasing = TRUE),]
+x.markers_tb_H
+
+y.markers <- KPMP.AKIintegrated.PT
+
+y.markers_tb <- y.markers %>%
+  data.frame() %>%
+  rownames_to_column(var="gene") %>%
+  filter(p_val_adj < 0.05) %>%
+  as_tibble()
+
+    #X-Y DEGs Intersection Table
+    
+    xy.comp.CACPR <- inner_join(x.markers_tb_H, y.markers_tb, by = "gene")
+    
+    xy.comp.CACPR 
+    
+    #Set Range for Far Right Data Points
+    df.upper <- subset(xy.comp.CACPR, avg_log2FC.x > -.32 & avg_log2FC.y > -.32)
+    #Set Range for Far Left Data Points
+    df.lower <- subset(xy.comp.CACPR, avg_log2FC.x < 0.32 & avg_log2FC.y < .32)
+    
+    xy.comp.CACPR.plot <- ggplot(xy.comp.CACPR, aes(x = avg_log2FC.x, y = avg_log2FC.y, label=gene)) +
+      theme_classic() +
+      geom_point(
+        color=dplyr::case_when(
+          (xy.comp.CACPR$avg_log2FC.x > 1 & xy.comp.CACPR$avg_log2FC.y > 1) ~ "#1b9e77", #sets color for df.upper points
+          (xy.comp.CACPR$avg_log2FC.x < -1 & xy.comp.CACPR$avg_log2FC.y < -1) ~ "#d95f02", #sets color for df.lower points
+          TRUE ~ "black")) +
+      geom_text_repel(data=rbind(df.upper, df.lower),
+                      segment.sixy.comp.CACPRe  = 0.2, #<--!! what is this?? !!--
+                      segment.color = "grey50") +
+      geom_smooth (method=lm) +
+      labs(
+        title = paste("Correlation of Log2FC Values of DEGs from",
+                      "CACPR", "and",
+                      "KPMP", sep = " "), 
+        x = paste("Average log2FC", "CACPR"), 
+        y = paste("Average log2FC", "KPMP")
+      ) +
+      stat_poly_eq(aes(label = paste(..rr.label.., sep = "~~~")),
+                   label.x.npc = "left", label.y.npc = 0.90, #set the position of the eq
+                   rr.digits = 3)
+    
+    print(xy.comp.CACPR.plot)
+    
+    print(nrow(xy.comp.CACPR))
+
+
+```
+
+## IRI vs. KPMP DEGs
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center', fig.width=12, fig.height=6}
+
+x.markers <- IRIintegrated.PT
+
+x.markers_tb <- x.markers %>% data.frame() %>% filter(p_val_adj < 0.05) %>%  as_tibble()
+
+top6 <- list(head(x.markers_tb$gene))
+
+x.markers_tb_H <- mousegnameConverter(x.markers_tb, "gene")
+
+x.markers_tb_H = x.markers_tb_H[order(x.markers_tb_H[,"avg_log2FC"], decreasing = TRUE),]
+x.markers_tb_H
+
+y.markers <- KPMP.AKIintegrated.PT
+
+y.markers_tb <- y.markers %>%
+  data.frame() %>%
+  rownames_to_column(var="gene") %>%
+  filter(p_val_adj < 0.05) %>%
+  as_tibble()
+
+    #X-Y DEGs Intersection Table
+    
+    xy.comp.IRI <- inner_join(x.markers_tb_H, y.markers_tb, by = "gene")
+    
+    xy.comp.IRI 
+    
+    #Set Range for Far Right Data Points
+    df.upper <- subset(xy.comp.IRI, avg_log2FC.x > -.32 & avg_log2FC.y > -.32)
+    #Set Range for Far Left Data Points
+    df.lower <- subset(xy.comp.IRI, avg_log2FC.x < 0.32 & avg_log2FC.y < .32)
+    
+    xy.comp.IRI.plot <- ggplot(xy.comp.IRI, aes(x = avg_log2FC.x, y = avg_log2FC.y, label=gene)) +
+      theme_classic() +
+      geom_point(
+        color=dplyr::case_when(
+          (xy.comp.IRI$avg_log2FC.x > 1 & xy.comp.IRI$avg_log2FC.y > 1) ~ "#1b9e77", #sets color for df.upper points
+          (xy.comp.IRI$avg_log2FC.x < -1 & xy.comp.IRI$avg_log2FC.y < -1) ~ "#d95f02", #sets color for df.lower points
+          TRUE ~ "black")) +
+      geom_text_repel(data=rbind(df.upper, df.lower),
+                      segment.sixy.comp.IRIe  = 0.2, #<--!! what is this?? !!--
+                      segment.color = "grey50") +
+      geom_smooth (method=lm) +
+      labs(
+        title = paste("Correlation of Log2FC Values of DEGs from",
+                      "IRI", "and",
+                      "KPMP", sep = " "), 
+        x = paste("Average log2FC", "IRI"), 
+        y = paste("Average log2FC", "KPMP")
+      ) +
+      stat_poly_eq(aes(label = paste(..rr.label.., sep = "~~~")),
+                   label.x.npc = "left", label.y.npc = 0.90, #set the position of the eq
+                   rr.digits = 3)
+    
+    print(xy.comp.IRI.plot)
+    print(nrow(xy.comp.IRI))
+
+
+```
+
+
+## GSEA on CACPR and KPMP specific DEGs
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center', fig.width=12, fig.height=6}
+
+KPMP_common<-inner_join(xy.comp.CACPR, xy.comp.IRI, by="gene",keep=FALSE)
+KPMP_CACPR<-anti_join(xy.comp.CACPR, xy.comp.IRI, by="gene")
+KPMP_IRI<-anti_join(xy.comp.IRI, xy.comp.CACPR, by="gene")
+
+GSEAgos_common
+#125
+GSEAgos_IRI_only
+#484
+GSEAgos_CACPR_only
+#46
+
+KPMP_CACPR <- KPMP_CACPR %>% rename(SYMBOL = gene)
+
+head(KPMP_CACPR, n = 50)
+
+ENTREZ_list <- bitr(geneID = KPMP_CACPR$SYMBOL,  #input gene id
+                    fromType = "SYMBOL",           #input id type
+                    toType = "ENTREZID",           #output id type
+                    OrgDb = "org.Hs.eg.db"         #annotation Db
+                    )
+
+KPMP_CACPR <-  ENTREZ_list %>% inner_join(KPMP_CACPR, by = "SYMBOL")
+
+# Removing genes that are not statistically significant. 
+KPMP_CACPR <-  KPMP_CACPR %>% dplyr::filter(p_val_adj.x < 0.05)
+head(KPMP_CACPR, n = 50)
+
+KPMP_CACPR <-  KPMP_CACPR %>%  arrange(desc(avg_log2FC.x))
+
+KPMP_CACPR.ENTREZID <- KPMP_CACPR %>%
+  dplyr::select(ENTREZID, avg_log2FC.x)
+
+geneList <- KPMP_CACPR.ENTREZID$avg_log2FC.x
+names(geneList) <- rownames(KPMP_CACPR.ENTREZID)
+
+gse.go <- gseGO(geneList = geneList,                  #order ranked geneList
+                       OrgDb = "org.Hs.eg.db",    
+                       ont = "all",
+                       by = "fgsea",                  #fgsea or DOSE
+                       )  
+gse.go
+
+p1 <- dotplot(gse.go, showCategory=10, split=".sign") + facet_grid(.~.sign) + labs(title = paste("Upregulated Pathways")) +        
+        theme(plot.title = element_text(hjust = 0.5))
+
+print (p1)
+
+p2 <- ridgeplot(gse.go) + labs(title = paste("Enrichment Distribution"))
+
+print (p2)
+
+```
+
+## GSEA on Common CACPR and IRI: KPMP DEGs
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center', fig.width=12, fig.height=6}
+
+
+```
+
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center'}
+Sys.time()
+sessionInfo()
+```

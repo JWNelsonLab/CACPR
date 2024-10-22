@@ -1,0 +1,1411 @@
+---
+title: "Dataset Integration"
+author: "Jonathan Nelson"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: bootstrap
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Packages
+```{r load new packages, echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!requireNamespace('BiocManager', quietly = TRUE)) {install.packages('BiocManager'); require("BiocManager")}
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("sctransform")) {install.packages("sctransform"); require("sctransform")}
+if (!require("glmGamPoi")) {BiocManager::install('glmGamPoi'); require("glmGamPoi")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("EnhancedVolcano")) {BiocManager::install('EnhancedVolcano'); require("EnhancedVolcano")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("gghighlight")) {install.packages("gghighlight"); require("gghighlight")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("here")) {install.packages("here"); require("here")}
+
+here::here()
+
+```
+
+# Loading Filtered Seurat Object
+
+These files are post-DoubletFinder.
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center'}
+
+Sham <- readRDS(here("Output", "MH3_CACPR_sham.rds"))
+CACPR <- readRDS(here("Output", "MH1_CACPR.rds"))
+
+IRISham2 <- readRDS(here("Output", "IRIsham2.rds"))
+IRI2 <- readRDS(here("Output", "IRI12h2.rds"))
+
+IRISham3 <- readRDS(here("Output", "IRIsham3.rds"))
+IRI3 <- readRDS(here("Output", "IRI12h3.rds"))
+
+IRISham1_1 <- readRDS(here("Output", "IRIsham1_1.rds"))
+IRI1_1 <- readRDS(here("Output", "IRI12h1_1.rds"))
+
+IRISham1_2 <- readRDS(here("Output", "IRIsham1_2.rds"))
+IRI1_2 <- readRDS(here("Output", "IRI12h1_2.rds"))
+
+# Add Lab Metadata
+
+Sham@meta.data$class.lab <- "Hutchens"
+CACPR@meta.data$class.lab <- "Hutchens"
+IRISham2@meta.data$class.lab <- "Humphreys"
+IRI2@meta.data$class.lab <- "Humphreys"
+IRISham3@meta.data$class.lab <- "Humphreys"
+IRI3@meta.data$class.lab <- "Humphreys"
+IRISham1_1@meta.data$class.lab <- "Humphreys"
+IRI1_1@meta.data$class.lab <- "Humphreys"
+IRISham1_2@meta.data$class.lab <- "Humphreys"
+IRI1_2@meta.data$class.lab <- "Humphreys"
+
+
+# Add Condition Metadata
+
+Sham@meta.data$class.sample <- "CACPR Sham"
+CACPR@meta.data$class.sample <- "CACPR"
+IRISham2@meta.data$class.sample <- "IRI Sham"
+IRI2@meta.data$class.sample <- "IRI"
+IRISham3@meta.data$class.sample <- "IRI Sham"
+IRI3@meta.data$class.sample <- "IRI"
+IRISham1_1@meta.data$class.sample <- "IRI Sham"
+IRI1_1@meta.data$class.sample <- "IRI"
+IRISham1_2@meta.data$class.sample <- "IRI Sham"
+IRI1_2@meta.data$class.sample <- "IRI"
+
+
+
+```
+
+
+# Merging Sham and CACPR Replicates
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center'}
+
+CACPR_Combined <- merge(Sham, y = c(CACPR), project = "CACPR")
+
+#saveRDS(CACPR_Combined, file = here("Outputs", "CACPR_Combined.rds"))
+
+#To start from this point just reload RDS
+#CACPR_Combined <- readRDS("Outputs", "CACPR_Combined.rds")
+
+#rm(Sham, CACPR)
+
+```
+
+
+## Data Filtering and Integration
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.align = 'center'}
+
+head(CACPR_Combined@meta.data)
+
+VlnPlot(CACPR_Combined, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, group.by = "orig.ident")
+
+VlnPlot(CACPR_Combined, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, group.by = "class.sample")
+
+VlnPlot(CACPR_Combined, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, group.by = "orig.ident", pt.size = 0)
+
+VlnPlot(CACPR_Combined, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, group.by = "class.sample", pt.size = 0)
+
+CACPR_Combined <- subset(CACPR_Combined, subset = nFeature_RNA < 5000 & nCount_RNA < 10000)
+
+VlnPlot(CACPR_Combined, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, group.by = "orig.ident", pt.size = 0)
+
+VlnPlot(CACPR_Combined, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, group.by = "class.sample", pt.size = 0)
+
+CACPR_Combined
+
+head(CACPR_Combined@meta.data)
+
+median(CACPR_Combined@meta.data$nCount_RNA)
+median(CACPR_Combined@meta.data$nFeature_RNA)
+
+```
+
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.show='hide', fig.align = 'center'}
+
+
+CACPR_Combined <- NormalizeData(CACPR_Combined, normalization.method = "LogNormalize", scale.factor = 10000)
+
+CACPR_Combined <- FindVariableFeatures(CACPR_Combined, selection.method = "vst", nfeatures = 2000)
+
+all.genes <- rownames(CACPR_Combined)
+CACPR_Combined <- ScaleData(CACPR_Combined, features = all.genes)
+
+CACPR_Combined <- RunPCA(CACPR_Combined, features = VariableFeatures(object = CACPR_Combined))
+
+ElbowPlot(CACPR_Combined)
+
+CACPR_Combined <- FindNeighbors(CACPR_Combined, dims = 1:50)
+CACPR_Combined <- FindClusters(CACPR_Combined, resolution = 0.50)
+
+CACPR_Combined <- RunUMAP(CACPR_Combined, dims = 1:50)
+
+DimPlot(CACPR_Combined, reduction = "umap")
+DimPlot(CACPR_Combined, reduction = "umap", group.by = "class.sample")
+
+CACPR_Combined.list <- SplitObject(CACPR_Combined, split.by = "class.sample")
+
+CACPR_Combined.list <- lapply(X = CACPR_Combined.list, FUN = function(x) {
+  x <- NormalizeData(x, verbose = FALSE)
+  x <- FindVariableFeatures(x, verbose = FALSE)
+})
+
+features <- SelectIntegrationFeatures(object.list = CACPR_Combined.list)
+CACPR_Combined.list <- lapply(X = CACPR_Combined.list, FUN = function(x) {
+  x <- ScaleData(x, features = features, verbose = FALSE)
+  x <- RunPCA(x, features = features, verbose = FALSE)
+})
+
+anchors <- FindIntegrationAnchors(object.list = CACPR_Combined.list, reduction = "rpca", dims = 1:15)
+CACPR_Combined <- IntegrateData(anchorset = anchors, dims = 1:50)
+
+CACPR_Combined <- ScaleData(CACPR_Combined, verbose = FALSE)
+CACPR_Combined <- RunPCA(CACPR_Combined, verbose = FALSE)
+CACPR_Combined <- RunUMAP(CACPR_Combined, dims = 1:50)
+
+DefaultAssay(CACPR_Combined) <- "integrated"
+
+CACPR_Combined <- FindNeighbors(CACPR_Combined, reduction = "pca", dims = 1:50)
+CACPR_Combined <- FindClusters(CACPR_Combined, resolution = 2)
+
+DimPlot(CACPR_Combined, reduction = "umap", label = T)
+DimPlot(CACPR_Combined, reduction = "umap", group.by = "class.sample")
+DimPlot(CACPR_Combined, reduction = "umap", split.by = "class.sample")
+
+DimPlot(CACPR_Combined, reduction = "umap", group.by = "class.lab")
+DimPlot(CACPR_Combined, reduction = "umap", split.by = "class.lab")
+
+table(Idents(CACPR_Combined))
+
+table(Idents(CACPR_Combined), CACPR_Combined$class.sample)
+
+DefaultAssay(CACPR_Combined) <- "RNA"
+
+FeaturePlot(CACPR_Combined, "Havcr1", split.by = "class.sample")
+
+VlnPlot(CACPR_Combined, "Havcr1", split.by = "class.sample", group.by = "class.sample")
+VlnPlot(CACPR_Combined, "Lrp2", split.by = "class.sample", group.by = "class.sample")
+VlnPlot(CACPR_Combined, "Slc12a1", split.by = "class.sample", group.by = "class.sample")
+
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.align = 'center', fig.width=12}
+
+#CACPR_Combined <- readRDS(here("Output", "CACPR_integrated.rds"))
+
+SO <- CACPR_Combined
+
+DefaultAssay(SO) <- "RNA"
+
+markers.to.plot1 <- c("Lrp2",         # PT
+                      "Slc5a12",      # PT-S1
+                      "Slc13a3",      # PT-S2
+                      "Slc16a9",      # PT-S3
+                      "Havcr1",       # Injured PT
+                      "Hspa1a",       # Severe Injured PT
+                      "Epha7",        # dTL
+                      "Cryab",        # dTL
+                      "Cdh13",        # dTL1
+                      "Slc14a2",      # dTL2
+                      "Slc12a1",      # TAL
+                      "Umod",         # TAL, DCT1
+                      "Egf",          # TAL, DCT1,
+                      "Cldn10",       # TAL
+                      "Cldn16",       # TAL
+                      "Nos1",         # MD
+                      "Slc12a3",      # DCT
+                      "Pvalb",        # DCT1
+                      "Slc8a1",       # DCT2, CNT
+                      "Aqp2",         # PC
+                      "Slc4a1",       # IC-A
+                      "Slc26a4",      # IC-B
+                      "Nphs1",        # Podo
+                      "Ncam1",        # PEC
+                      "Lyve1",        # Lymph
+                      "Flt1",         # Endo
+                      "Emcn",         # Glom Endo
+                      "Kdr",          # Capillary Endo
+                      "Pdgfrb",       # Perivascular
+                      "Pdgfra",       # Fib
+                      "Piezo2",       # Mesangial
+                      "Acta2",        # Mural
+                      "Ptprc",        # Immune
+                      "Cd74",         # Macrophage
+                      "Skap1",        # B/T Cells 
+                      "Upk1b",        # Uro
+                      "Top2a"         # Proliferation
+                      )
+
+
+DotPlot(SO,
+features = markers.to.plot1,
+dot.scale = 8,
+dot.min = 0,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5,
+group.by = "seurat_clusters") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  coord_flip()
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.align = 'center'}
+
+Idents(SO) <- SO@meta.data$seurat_clusters
+
+DimPlot(SO, label = TRUE)
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.align = 'center'}
+
+#Cluster36 <- FindMarkers(SO, ident.1 = 36, min.pct = 0.25, only.pos= T)
+#Cluster39 <- FindMarkers(SO, ident.1 = 39, min.pct = 0.25, only.pos= T)
+#Cluster41 <- FindMarkers(SO, ident.1 = 41, min.pct = 0.25, only.pos= T)
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.align = 'center'}
+
+SO@meta.data <- SO@meta.data %>% 
+  mutate(clustering.CACPR = case_when(
+    seurat_clusters == 0 ~ "TAL1a",
+    seurat_clusters == 1 ~ "PTS2",
+    seurat_clusters == 2 ~ "FIB",
+    seurat_clusters == 3 ~ "EC2",
+    seurat_clusters == 4 ~ "EC3",
+    seurat_clusters == 5 ~ "TAL1b",
+    seurat_clusters == 6 ~ "DCT1",
+    seurat_clusters == 7 ~ "PTS3",
+    seurat_clusters == 8 ~ "PTS1",
+    seurat_clusters == 9 ~ "PC",
+    seurat_clusters == 10 ~ "PTinj 1",
+    seurat_clusters == 11 ~ "FIB",
+    seurat_clusters == 12 ~ "DCT2",
+    seurat_clusters == 13 ~ "PT?a",
+    seurat_clusters == 14 ~ "PT?b",
+    seurat_clusters == 15 ~ "PTinj 2",
+    seurat_clusters == 16 ~ "PTinj 3",
+    seurat_clusters == 17 ~ "PTc",
+    seurat_clusters == 18 ~ "EC4",
+    seurat_clusters == 19 ~ "DTL",
+    seurat_clusters == 20 ~ "PTS1",
+    seurat_clusters == 21 ~ "TAL2",
+    seurat_clusters == 22 ~ "CNT",
+    seurat_clusters == 23 ~ "PODO",
+    seurat_clusters == 24 ~ "ICA",
+    seurat_clusters == 25 ~ "PC",
+    seurat_clusters == 26 ~ "MACRO",
+    seurat_clusters == 27 ~ "Doublet",
+    seurat_clusters == 28 ~ "ICB",
+    seurat_clusters == 29 ~ "Doublet",
+    seurat_clusters == 30 ~ "CONTRACT",
+    seurat_clusters == 31 ~ "Doublet",
+    seurat_clusters == 32 ~ "URO",
+    seurat_clusters == 33 ~ "PEC",
+    seurat_clusters == 34 ~ "Doublet",
+    seurat_clusters == 35 ~ "DTL2",
+    seurat_clusters == 36 ~ "Doublet",
+    seurat_clusters == 37 ~ "LYMPHO",
+    seurat_clusters == 38 ~ "MD",
+    seurat_clusters == 39 ~ "MES",
+    seurat_clusters == 40 ~ "Doublet",
+    seurat_clusters == 41 ~ "LYMPH",
+    seurat_clusters == 42 ~ "Doublet",
+    TRUE ~ NA_character_  # Handle any unexpected values
+  ))
+
+DimPlot(SO, group.by = "clustering.CACPR", label = T) + ggtitle("Subclass Annotation")
+
+
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.align = 'center'}
+
+
+Idents(SO) <- SO@meta.data$clustering.CACPR
+
+SO2 <- subset(SO, idents = "Doublet", invert = T)
+
+DimPlot(SO2, label = T) + ggtitle("Doublets Removed")
+
+DefaultAssay(SO2) <- "integrated"
+
+SO2 <- RunPCA(SO2, verbose = F)
+SO2 <- RunUMAP(SO2, dims = 1:45, verbose = F)
+SO2 <- FindNeighbors(SO2, dims = 1:45, verbose = F)
+SO2 <- FindClusters(SO2, resolution = 2, verbose = T)
+
+DimPlot(SO2, label = T, group.by = "Sample")
+DimPlot(SO2, label = T, group.by = "clustering.CACPR")
+DimPlot(SO2, label = T)
+
+SO2@meta.data$class.Merge <- SO2@meta.data$clustering.CACPR
+
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.align = 'center', fig.width=12}
+
+DotPlot(SO2,
+features = markers.to.plot1,
+dot.scale = 8,
+dot.min = 0,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5,
+assay = "RNA")+
+coord_flip()
+
+
+```
+
+# CACPR Final Metadata
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.align = 'center'}
+
+SO2@meta.data <- SO2@meta.data %>% 
+  mutate(subclass.CACPR = case_when(
+    seurat_clusters == 0 ~ "TAL1",
+    seurat_clusters == 1 ~ "PTS2",
+    seurat_clusters == 2 ~ "FIB",
+    seurat_clusters == 3 ~ "EC",
+    seurat_clusters == 4 ~ "EC",
+    seurat_clusters == 5 ~ "PTinj",
+    seurat_clusters == 6 ~ "TAL1",
+    seurat_clusters == 7 ~ "DCT1",
+    seurat_clusters == 8 ~ "PTS1",
+    seurat_clusters == 9 ~ "PTS3",
+    seurat_clusters == 10 ~ "PTinj",
+    seurat_clusters == 11 ~ "PTinj",
+    seurat_clusters == 12 ~ "PC",
+    seurat_clusters == 13 ~ "FIB",
+    seurat_clusters == 14 ~ "DCT2",
+    seurat_clusters == 15 ~ "PTinj",
+    seurat_clusters == 16 ~ "EC",
+    seurat_clusters == 17 ~ "PTinj",
+    seurat_clusters == 18 ~ "DTL",
+    seurat_clusters == 19 ~ "PTS1",
+    seurat_clusters == 20 ~ "TAL2",
+    seurat_clusters == 21 ~ "CNT",
+    seurat_clusters == 22 ~ "PODO",
+    seurat_clusters == 23 ~ "ICA",
+    seurat_clusters == 24 ~ "PC",
+    seurat_clusters == 25 ~ "MACRO",
+    seurat_clusters == 26 ~ "ICB",
+    seurat_clusters == 27 ~ "CONTRACT",
+    seurat_clusters == 28 ~ "URO",
+    seurat_clusters == 29 ~ "PEC",
+    seurat_clusters == 30 ~ "DTL",
+    seurat_clusters == 31 ~ "LYMPHO",
+    seurat_clusters == 32 ~ "MD",
+    seurat_clusters == 33 ~ "MES",
+    seurat_clusters == 34 ~ "LYMPH",
+    TRUE ~ NA_character_  # Handle any unexpected values
+  )) 
+
+SO2@meta.data$subclass.CACPR <- factor(SO2@meta.data$subclass.CACPR, levels = c("PTS1", "PTS2", "PTS3", "PTinj", "DTL", "TAL1", "TAL2", "MD", "DCT1", "DCT2", "CNT", "PC", "ICA", "ICB", "URO", "PEC", "FIB", "MES", "CONTRACT", "PODO", "EC", "LYMPH", "MACRO", "LYMPHO"))
+
+DimPlot(SO2, label = T, group.by = "subclass.CACPR")
+DimPlot(SO2,  group.by = "subclass.CACPR", split.by = "Sample")
+
+SO2@meta.data <- SO2@meta.data %>% 
+  mutate(class.CACPR = case_when(
+    seurat_clusters == 0 ~ "TAL",
+    seurat_clusters == 1 ~ "PT",
+    seurat_clusters == 2 ~ "FIB",
+    seurat_clusters == 3 ~ "EC",
+    seurat_clusters == 4 ~ "EC",
+    seurat_clusters == 5 ~ "PT",
+    seurat_clusters == 6 ~ "TAL",
+    seurat_clusters == 7 ~ "DCT",
+    seurat_clusters == 8 ~ "PT",
+    seurat_clusters == 9 ~ "PT",
+    seurat_clusters == 10 ~ "PT",
+    seurat_clusters == 11 ~ "PT",
+    seurat_clusters == 12 ~ "PC",
+    seurat_clusters == 13 ~ "FIB",
+    seurat_clusters == 14 ~ "DCT",
+    seurat_clusters == 15 ~ "PT",
+    seurat_clusters == 16 ~ "EC",
+    seurat_clusters == 17 ~ "PT",
+    seurat_clusters == 18 ~ "DTL",
+    seurat_clusters == 19 ~ "PT",
+    seurat_clusters == 20 ~ "TAL",
+    seurat_clusters == 21 ~ "CNT",
+    seurat_clusters == 22 ~ "PODO",
+    seurat_clusters == 23 ~ "ICA",
+    seurat_clusters == 24 ~ "PC",
+    seurat_clusters == 25 ~ "IMMUNE",
+    seurat_clusters == 26 ~ "ICB",
+    seurat_clusters == 27 ~ "CONTRACT",
+    seurat_clusters == 28 ~ "URO",
+    seurat_clusters == 29 ~ "PEC",
+    seurat_clusters == 30 ~ "DTL",
+    seurat_clusters == 31 ~ "IMMUNE",
+    seurat_clusters == 32 ~ "TAL",
+    seurat_clusters == 33 ~ "MES",
+    seurat_clusters == 34 ~ "EC",
+    TRUE ~ NA_character_  # Handle any unexpected values
+  )) 
+
+SO2@meta.data$class.CACPR <- factor(SO2@meta.data$class.CACPR, levels = c("PT", "DTL", "TAL", "DCT", "CNT", "PC", "ICA", "ICB", "URO", "PEC", "MES", "FIB", "CONTRACT", "PODO", "EC", "IMMUNE"))
+
+DimPlot(SO2, label = T, group.by = "class.CACPR")
+DimPlot(SO2,  group.by = "class.CACPR", split.by = "Sample")
+
+SO2@meta.data <- SO2@meta.data %>% 
+  mutate(type.CACPR = case_when(
+    seurat_clusters == 0 ~ "EPITHELIAL",
+    seurat_clusters == 1 ~ "EPITHELIAL",
+    seurat_clusters == 2 ~ "STROMAL",
+    seurat_clusters == 3 ~ "ENDOTHELIAL",
+    seurat_clusters == 4 ~ "ENDOTHELIAL",
+    seurat_clusters == 5 ~ "EPITHELIAL",
+    seurat_clusters == 6 ~ "EPITHELIAL",
+    seurat_clusters == 7 ~ "EPITHELIAL",
+    seurat_clusters == 8 ~ "EPITHELIAL",
+    seurat_clusters == 9 ~ "EPITHELIAL",
+    seurat_clusters == 10 ~ "EPITHELIAL",
+    seurat_clusters == 11 ~ "EPITHELIAL",
+    seurat_clusters == 12 ~ "EPITHELIAL",
+    seurat_clusters == 13 ~ "STROMAL",
+    seurat_clusters == 14 ~ "EPITHELIAL",
+    seurat_clusters == 15 ~ "EPITHELIAL",
+    seurat_clusters == 16 ~ "ENDOTHELIAL",
+    seurat_clusters == 17 ~ "EPITHELIAL",
+    seurat_clusters == 18 ~ "EPITHELIAL",
+    seurat_clusters == 19 ~ "EPITHELIAL",
+    seurat_clusters == 20 ~ "EPITHELIAL",
+    seurat_clusters == 21 ~ "EPITHELIAL",
+    seurat_clusters == 22 ~ "EPITHELIAL",
+    seurat_clusters == 23 ~ "EPITHELIAL",
+    seurat_clusters == 24 ~ "EPITHELIAL",
+    seurat_clusters == 25 ~ "IMMUNE",
+    seurat_clusters == 26 ~ "EPITHELIAL",
+    seurat_clusters == 27 ~ "STROMAL",
+    seurat_clusters == 28 ~ "EPITHELIAL",
+    seurat_clusters == 29 ~ "EPITHELIAL",
+    seurat_clusters == 30 ~ "EPITHELIAL",
+    seurat_clusters == 31 ~ "IMMUNE",
+    seurat_clusters == 32 ~ "EPITHELIAL",
+    seurat_clusters == 33 ~ "STROMAL",
+    seurat_clusters == 34 ~ "ENDOTHELIAL",
+    TRUE ~ NA_character_  # Handle any unexpected values
+  )) 
+
+SO2@meta.data$type.CACPR <- factor(SO2@meta.data$type.CACPR, levels = c("EPITHELIAL", "ENDOTHELIAL", "STROMAL", "IMMUNE"))
+
+DimPlot(SO2, label = T, group.by = "type.CACPR")
+DimPlot(SO2,  group.by = "type.CACPR", split.by = "Sample")
+
+#saveRDS(SO2, here("Output", "CACPR_integrated.rds")) #Change
+
+
+```
+
+
+# Merging Sham and IRI Replicates
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center'}
+
+
+
+IRI_Combined <- merge(IRISham1_1, y = c(IRISham1_2, IRISham2, IRISham3, IRI1_1, IRI1_2, IRI2, IRI3), project = "IRI")
+
+#saveRDS(CACPR_Combined, file = here("Outputs", "CACPR_Combined.rds"))
+
+#To start from this point just reload RDS
+#CACPR_Combined <- readRDS("Outputs", "CACPR_Combined.rds")
+
+#rm(Sham, CACPR)
+
+```
+
+
+## Data Filtering and Integration
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.align = 'center'}
+
+head(IRI_Combined@meta.data)
+
+VlnPlot(IRI_Combined, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, group.by = "orig.ident")
+
+VlnPlot(IRI_Combined, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, group.by = "class.sample")
+
+VlnPlot(IRI_Combined, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, group.by = "Sample")
+
+VlnPlot(IRI_Combined, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, group.by = "orig.ident", pt.size = 0)
+
+VlnPlot(IRI_Combined, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, group.by = "class.sample", pt.size = 0)
+
+VlnPlot(IRI_Combined, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, group.by = "Sample", pt.size = 0)
+
+IRI_Combined <- subset(IRI_Combined, subset = nFeature_RNA < 5000 & nCount_RNA < 10000)
+
+VlnPlot(IRI_Combined, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, group.by = "orig.ident", pt.size = 0)
+
+VlnPlot(IRI_Combined, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, group.by = "class.sample", pt.size = 0)
+
+IRI_Combined
+
+head(IRI_Combined@meta.data)
+
+median(IRI_Combined@meta.data$nCount_RNA)
+median(IRI_Combined@meta.data$nFeature_RNA)
+
+```
+
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.show='hide', fig.align = 'center'}
+
+
+IRI_Combined <- NormalizeData(IRI_Combined, normalization.method = "LogNormalize", scale.factor = 10000)
+
+IRI_Combined <- FindVariableFeatures(IRI_Combined, selection.method = "vst", nfeatures = 2000)
+
+all.genes <- rownames(IRI_Combined)
+IRI_Combined <- ScaleData(IRI_Combined, features = all.genes)
+
+IRI_Combined <- RunPCA(IRI_Combined, features = VariableFeatures(object = IRI_Combined))
+
+ElbowPlot(IRI_Combined)
+
+IRI_Combined <- FindNeighbors(IRI_Combined, dims = 1:50)
+IRI_Combined <- FindClusters(IRI_Combined, resolution = 0.50)
+
+IRI_Combined <- RunUMAP(IRI_Combined, dims = 1:50)
+
+DimPlot(IRI_Combined, reduction = "umap")
+DimPlot(IRI_Combined, reduction = "umap", group.by = "Sample")
+
+IRI_Combined.list <- SplitObject(IRI_Combined, split.by = "Sample")
+
+IRI_Combined.list <- lapply(X = IRI_Combined.list, FUN = function(x) {
+  x <- NormalizeData(x, verbose = FALSE)
+  x <- FindVariableFeatures(x, verbose = FALSE)
+})
+
+features <- SelectIntegrationFeatures(object.list = IRI_Combined.list)
+IRI_Combined.list <- lapply(X = IRI_Combined.list, FUN = function(x) {
+  x <- ScaleData(x, features = features, verbose = FALSE)
+  x <- RunPCA(x, features = features, verbose = FALSE)
+})
+
+anchors <- FindIntegrationAnchors(object.list = IRI_Combined.list, reduction = "rpca", dims = 1:15)
+IRI_Combined <- IntegrateData(anchorset = anchors, dims = 1:50)
+
+IRI_Combined <- ScaleData(IRI_Combined, verbose = FALSE)
+IRI_Combined <- RunPCA(IRI_Combined, verbose = FALSE)
+IRI_Combined <- RunUMAP(IRI_Combined, dims = 1:50)
+
+DefaultAssay(IRI_Combined) <- "integrated"
+
+IRI_Combined <- FindNeighbors(IRI_Combined, reduction = "pca", dims = 1:50)
+IRI_Combined <- FindClusters(IRI_Combined, resolution = 2)
+
+DimPlot(IRI_Combined, reduction = "umap", label = T)
+DimPlot(IRI_Combined, reduction = "umap", group.by = "class.sample")
+DimPlot(IRI_Combined, reduction = "umap", split.by = "class.sample")
+
+DimPlot(IRI_Combined, reduction = "umap", group.by = "Sample")
+DimPlot(IRI_Combined, reduction = "umap", split.by = "Sample")
+
+table(Idents(IRI_Combined))
+
+table(Idents(IRI_Combined), IRI_Combined$class.sample)
+
+DefaultAssay(IRI_Combined) <- "RNA"
+
+FeaturePlot(IRI_Combined, "Havcr1", split.by = "class.sample")
+
+VlnPlot(IRI_Combined, "Havcr1", split.by = "class.sample", group.by = "class.sample")
+VlnPlot(IRI_Combined, "Lrp2", split.by = "class.sample", group.by = "class.sample")
+VlnPlot(IRI_Combined, "Slc12a1", split.by = "class.sample", group.by = "class.sample")
+
+
+IRIcluster26 <- FindMarkers(IRI_Combined, ident.1 = "26", min.pct = 0.25, only.pos = TRUE)
+IRIcluster29 <- FindMarkers(IRI_Combined, ident.1 = "29", min.pct = 0.25, only.pos = TRUE)
+
+VlnPlot(IRI_Combined, features = c("Hspa1a"), assay = "RNA")
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.show='hide', fig.align = 'center'}
+
+DimPlot(IRI_Combined, group.by = "Sample")
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.align = 'center', fig.width=12}
+
+
+SO3 <- IRI_Combined
+
+
+VlnPlot(SO3, "nFeature_RNA")
+
+DotPlot(SO3,
+features = markers.to.plot1,
+dot.scale = 8,
+dot.min = 0,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5,
+assay = "RNA") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  coord_flip()
+
+```
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.show='hide', fig.align = 'center', fig.width=12}
+
+VlnPlot(SO2, "nFeature_RNA")
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.align = 'center'}
+
+
+SO3@meta.data <- SO3@meta.data %>% 
+  mutate(clustering.IRI = case_when(
+    seurat_clusters == 0 ~ "TALa",
+    seurat_clusters == 1 ~ "PTS1a",
+    seurat_clusters == 2 ~ "PT?",
+    seurat_clusters == 3 ~ "PTS2a",
+    seurat_clusters == 4 ~ "PTS2b",
+    seurat_clusters == 5 ~ "PTS3",
+    seurat_clusters == 6 ~ "PTS1a",
+    seurat_clusters == 7 ~ "TALb",
+    seurat_clusters == 8 ~ "DCT1",
+    seurat_clusters == 9 ~ "PTinj1",
+    seurat_clusters == 10 ~ "PCa",
+    seurat_clusters == 11 ~ "PCb",
+    seurat_clusters == 12 ~ "PTinj2",
+    seurat_clusters == 13 ~ "EC",
+    seurat_clusters == 14 ~ "TAL2",
+    seurat_clusters == 15 ~ "DCT2",
+    seurat_clusters == 16 ~ "PTinj3",
+    seurat_clusters == 17 ~ "CNT",
+    seurat_clusters == 18 ~ "DTL",
+    seurat_clusters == 19 ~ "FIB",
+    seurat_clusters == 20 ~ "DTL?",
+    seurat_clusters == 21 ~ "PTinj4",
+    seurat_clusters == 22 ~ "ICA",
+    seurat_clusters == 23 ~ "ICB",
+    seurat_clusters == 24 ~ "CNT",
+    seurat_clusters == 25 ~ "PTS1b",
+    seurat_clusters == 26 ~ "PT?",
+    seurat_clusters == 27 ~ "TAL1b",
+    seurat_clusters == 28 ~ "Doublet",
+    seurat_clusters == 29 ~ "PTinj",
+    seurat_clusters == 30 ~ "URO",
+    seurat_clusters == 31 ~ "Doublet",
+    seurat_clusters == 32 ~ "Doublet",
+    seurat_clusters == 33 ~ "Doublet",
+    seurat_clusters == 34 ~ "Doublet",
+    seurat_clusters == 35 ~ "PODO",
+    seurat_clusters == 36 ~ "PEC",
+    seurat_clusters == 37 ~ "Doublet",
+    seurat_clusters == 38 ~ "Doublet",
+    seurat_clusters == 39 ~ "Doublet",
+    seurat_clusters == 40 ~ "Doublet",
+    seurat_clusters == 41 ~ "Immune",
+    seurat_clusters == 42 ~ "Doublet",
+    seurat_clusters == 43 ~ "Doublet",
+    seurat_clusters == 44 ~ "Doublet",
+    TRUE ~ NA_character_  # Handle any unexpected values
+  )) 
+
+DimPlot(SO3, group.by = "clustering.IRI", label = T) + ggtitle("Subclass Annotation")
+
+
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.align = 'center'}
+
+Idents(SO3) <- SO3@meta.data$clustering.IRI
+
+SO4 <- subset(SO3, idents = "Doublet", invert = T)
+
+DimPlot(SO4, label = T) + ggtitle("Doublets Removed")
+
+DefaultAssay(SO4) <- "integrated"
+
+SO4 <- RunPCA(SO4, verbose = F)
+SO4 <- RunUMAP(SO4, dims = 1:45, verbose = F)
+SO4 <- FindNeighbors(SO4, dims = 1:45, verbose = F)
+SO4 <- FindClusters(SO4, resolution = 2.5, verbose = T)
+
+DimPlot(SO4, label = T, group.by = "Sample")
+DimPlot(SO4, label = T, group.by = "clustering.IRI")
+DimPlot(SO4, label = T)
+
+SO4@meta.data$class.Merge <- SO4@meta.data$clustering.IRI
+
+#IRIUnknown <- FindMarkers(SO4, ident.1 = "29", min.pct = 0.25, only.pos = TRUE)
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.align = 'center', fig.width=12}
+
+DotPlot(SO4,
+features = markers.to.plot1,
+dot.scale = 8,
+dot.min = 0,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5,
+assay = "RNA")+
+coord_flip()
+
+
+```
+
+
+
+# IRI Final Metadata
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.align = 'center'}
+
+SO4@meta.data <- SO4@meta.data %>% 
+  mutate(subclass.IRI = case_when(
+    seurat_clusters == 0 ~ "PTS2",
+    seurat_clusters == 1 ~ "PTS2",
+    seurat_clusters == 2 ~ "PTS1",
+    seurat_clusters == 3 ~ "PTS1",
+    seurat_clusters == 4 ~ "TAL1",
+    seurat_clusters == 5 ~ "DCT1",
+    seurat_clusters == 6 ~ "PTinj",
+    seurat_clusters == 7 ~ "PTS3",
+    seurat_clusters == 8 ~ "PC",
+    seurat_clusters == 9 ~ "TAL1",
+    seurat_clusters == 10 ~ "PTinj",
+    seurat_clusters == 11 ~ "TAL1",
+    seurat_clusters == 12 ~ "DCT2",
+    seurat_clusters == 13 ~ "TAL2",
+    seurat_clusters == 14 ~ "PTinj",
+    seurat_clusters == 15 ~ "PTinj",
+    seurat_clusters == 16 ~ "PTS1",
+    seurat_clusters == 17 ~ "EC",
+    seurat_clusters == 18 ~ "PTinj",
+    seurat_clusters == 19 ~ "CNT",
+    seurat_clusters == 20 ~ "DTL",
+    seurat_clusters == 21 ~ "FIB",
+    seurat_clusters == 22 ~ "PTinj",
+    seurat_clusters == 23 ~ "DTL",
+    seurat_clusters == 24 ~ "TAL1",
+    seurat_clusters == 25 ~ "PC",
+    seurat_clusters == 26 ~ "ICA",
+    seurat_clusters == 27 ~ "PC",
+    seurat_clusters == 28 ~ "ICB",
+    seurat_clusters == 29 ~ "PTinj",
+    seurat_clusters == 30 ~ "CNT",
+    seurat_clusters == 31 ~ "PTinj",
+    seurat_clusters == 32 ~ "PTS3",
+    seurat_clusters == 33 ~ "URO",
+    seurat_clusters == 34 ~ "EC",
+    seurat_clusters == 35 ~ "PTS1",
+    seurat_clusters == 36 ~ "PODO",
+    seurat_clusters == 37 ~ "PEC",
+    seurat_clusters == 38 ~ "IMMUNE",
+    TRUE ~ NA_character_  # Handle any unexpected values
+  )) 
+
+SO4@meta.data$subclass.IRI <- factor(SO4@meta.data$subclass.IRI, levels = c("PTS1", "PTS2", "PTS3", "PTinj", "DTL", "TAL1", "TAL2", "DCT1", "DCT2", "CNT", "PC", "ICA", "ICB", "URO", "PEC", "FIB", "MES", "PODO", "EC", "IMMUNE"))
+
+DimPlot(SO4, label = T, group.by = "subclass.IRI")
+DimPlot(SO4,  group.by = "subclass.IRI", split.by = "Sample")
+
+SO4@meta.data <- SO4@meta.data %>% 
+  mutate(class.IRI = case_when(
+    seurat_clusters == 0 ~ "PT",
+    seurat_clusters == 1 ~ "PT",
+    seurat_clusters == 2 ~ "PT",
+    seurat_clusters == 3 ~ "PT",
+    seurat_clusters == 4 ~ "TAL",
+    seurat_clusters == 5 ~ "DCT",
+    seurat_clusters == 6 ~ "PT",
+    seurat_clusters == 7 ~ "PT",
+    seurat_clusters == 8 ~ "PC",
+    seurat_clusters == 9 ~ "TAL",
+    seurat_clusters == 10 ~ "PT",
+    seurat_clusters == 11 ~ "TAL",
+    seurat_clusters == 12 ~ "DCT",
+    seurat_clusters == 13 ~ "TAL",
+    seurat_clusters == 14 ~ "PT",
+    seurat_clusters == 15 ~ "PT",
+    seurat_clusters == 16 ~ "PT",
+    seurat_clusters == 17 ~ "EC",
+    seurat_clusters == 18 ~ "PT",
+    seurat_clusters == 19 ~ "CNT",
+    seurat_clusters == 20 ~ "DTL",
+    seurat_clusters == 21 ~ "FIB",
+    seurat_clusters == 22 ~ "PT",
+    seurat_clusters == 23 ~ "DTL",
+    seurat_clusters == 24 ~ "TAL",
+    seurat_clusters == 25 ~ "PC",
+    seurat_clusters == 26 ~ "ICA",
+    seurat_clusters == 27 ~ "PC",
+    seurat_clusters == 28 ~ "ICB",
+    seurat_clusters == 29 ~ "PT",
+    seurat_clusters == 30 ~ "CNT",
+    seurat_clusters == 31 ~ "PT",
+    seurat_clusters == 32 ~ "PT",
+    seurat_clusters == 33 ~ "URO",
+    seurat_clusters == 34 ~ "EC",
+    seurat_clusters == 35 ~ "PT",
+    seurat_clusters == 36 ~ "PODO",
+    seurat_clusters == 37 ~ "PEC",
+    seurat_clusters == 38 ~ "IMMUNE",
+    TRUE ~ NA_character_  # Handle any unexpected values
+  )) 
+
+SO4@meta.data$class.IRI <- factor(SO4@meta.data$class.IRI, levels = c("PT", "DTL", "TAL", "DCT", "CNT", "PC", "ICA", "ICB", "URO", "PEC", "FIB", "PODO", "EC", "IMMUNE"))
+
+DimPlot(SO4, label = T, group.by = "class.IRI")
+DimPlot(SO4,  group.by = "class.IRI", split.by = "Sample")
+
+SO4@meta.data <- SO4@meta.data %>% 
+  mutate(type.IRI = case_when(
+    seurat_clusters == 0 ~ "EPITHELIAL",
+    seurat_clusters == 1 ~ "EPITHELIAL",
+    seurat_clusters == 2 ~ "EPITHELIAL",
+    seurat_clusters == 3 ~ "EPITHELIAL",
+    seurat_clusters == 4 ~ "EPITHELIAL",
+    seurat_clusters == 5 ~ "EPITHELIAL",
+    seurat_clusters == 6 ~ "EPITHELIAL",
+    seurat_clusters == 7 ~ "EPITHELIAL",
+    seurat_clusters == 8 ~ "EPITHELIAL",
+    seurat_clusters == 9 ~ "EPITHELIAL",
+    seurat_clusters == 10 ~ "EPITHELIAL",
+    seurat_clusters == 11 ~ "EPITHELIAL",
+    seurat_clusters == 12 ~ "EPITHELIAL",
+    seurat_clusters == 13 ~ "EPITHELIAL",
+    seurat_clusters == 14 ~ "EPITHELIAL",
+    seurat_clusters == 15 ~ "EPITHELIAL",
+    seurat_clusters == 16 ~ "EPITHELIAL",
+    seurat_clusters == 17 ~ "ENDOTHELIAL",
+    seurat_clusters == 18 ~ "EPITHELIAL",
+    seurat_clusters == 19 ~ "EPITHELIAL",
+    seurat_clusters == 20 ~ "EPITHELIAL",
+    seurat_clusters == 21 ~ "STROMAL",
+    seurat_clusters == 22 ~ "EPITHELIAL",
+    seurat_clusters == 23 ~ "EPITHELIAL",
+    seurat_clusters == 24 ~ "EPITHELIAL",
+    seurat_clusters == 25 ~ "EPITHELIAL",
+    seurat_clusters == 26 ~ "EPITHELIAL",
+    seurat_clusters == 27 ~ "EPITHELIAL",
+    seurat_clusters == 28 ~ "EPITHELIAL",
+    seurat_clusters == 29 ~ "EPITHELIAL",
+    seurat_clusters == 30 ~ "EPITHELIAL",
+    seurat_clusters == 31 ~ "EPITHELIAL",
+    seurat_clusters == 32 ~ "EPITHELIAL",
+    seurat_clusters == 33 ~ "EPITHELIAL",
+    seurat_clusters == 34 ~ "ENDOTHELIAL",
+    seurat_clusters == 35 ~ "EPITHELIAL",
+    seurat_clusters == 36 ~ "EPITHELIAL",
+    seurat_clusters == 37 ~ "EPITHELIAL",
+    seurat_clusters == 38 ~ "IMMUNE",
+    TRUE ~ NA_character_  # Handle any unexpected values
+  )) 
+ 
+SO4@meta.data$type.IRI <- factor(SO4@meta.data$type.IRI, levels = c("EPITHELIAL", "ENDOTHELIAL", "STROMAL", "IMMUNE"))
+
+DimPlot(SO4, label = T, group.by = "type.IRI")
+DimPlot(SO4,  group.by = "type.IRI", split.by = "Sample")
+
+#saveRDS(SO4, here("Output", "IRI_integrated.rds")) #Change
+
+```
+
+
+# Merging CACPR and IRI Replicates
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center'}
+
+
+All_Combined <- merge(SO2, y = c(SO4), project = "All")
+
+DefaultAssay(All_Combined) <- "RNA" 
+#saveRDS(CACPR_Combined, file = here("Outputs", "CACPR_Combined.rds"))
+
+#To start from this point just reload RDS
+#CACPR_Combined <- readRDS("Outputs", "CACPR_Combined.rds")
+
+#rm(Sham, CACPR)
+```
+
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.show='hide', fig.align = 'center'}
+
+
+All_Combined <- NormalizeData(All_Combined, normalization.method = "LogNormalize", scale.factor = 10000)
+
+All_Combined <- FindVariableFeatures(All_Combined, selection.method = "vst", nfeatures = 2000)
+
+all.genes <- rownames(All_Combined)
+All_Combined <- ScaleData(All_Combined, features = all.genes)
+
+All_Combined <- RunPCA(All_Combined, features = VariableFeatures(object = All_Combined))
+
+ElbowPlot(All_Combined)
+
+All_Combined <- FindNeighbors(All_Combined, dims = 1:50)
+All_Combined <- FindClusters(All_Combined, resolution = 0.50)
+
+All_Combined <- RunUMAP(All_Combined, dims = 1:50)
+
+DimPlot(All_Combined, reduction = "umap")
+DimPlot(All_Combined, reduction = "umap", group.by = "Sample")
+
+All_Combined.list <- SplitObject(All_Combined, split.by = "Sample")
+
+All_Combined.list <- lapply(X = All_Combined.list, FUN = function(x) {
+  x <- NormalizeData(x, verbose = FALSE)
+  x <- FindVariableFeatures(x, verbose = FALSE)
+})
+
+features <- SelectIntegrationFeatures(object.list = All_Combined.list)
+All_Combined.list <- lapply(X = All_Combined.list, FUN = function(x) {
+  x <- ScaleData(x, features = features, verbose = FALSE)
+  x <- RunPCA(x, features = features, verbose = FALSE)
+})
+
+anchors <- FindIntegrationAnchors(object.list = All_Combined.list, reduction = "rpca", dims = 1:15)
+All_Combined <- IntegrateData(anchorset = anchors, dims = 1:50)
+
+All_Combined <- ScaleData(All_Combined, verbose = FALSE)
+All_Combined <- RunPCA(All_Combined, verbose = FALSE)
+
+DefaultAssay(All_Combined) <- "integrated"
+
+All_Combined <- FindNeighbors(All_Combined, reduction = "pca", dims = 1:45)
+All_Combined <- FindClusters(All_Combined, resolution = 2.5)
+All_Combined <- RunUMAP(All_Combined, dims = 1:45)
+
+DimPlot(All_Combined, reduction = "umap", label = T)
+DimPlot(All_Combined, reduction = "umap", group.by = "class.sample")
+DimPlot(All_Combined, reduction = "umap", split.by = "class.sample")
+
+DimPlot(All_Combined, reduction = "umap", group.by = "Sample")
+DimPlot(All_Combined, reduction = "umap", split.by = "Sample")
+
+table(Idents(All_Combined))
+
+table(Idents(All_Combined), All_Combined$class.sample)
+
+DefaultAssay(All_Combined) <- "RNA"
+
+FeaturePlot(All_Combined, "Havcr1", split.by = "class.sample")
+
+VlnPlot(All_Combined, "Havcr1", split.by = "class.sample", group.by = "class.sample")
+VlnPlot(All_Combined, "Lrp2", split.by = "class.sample", group.by = "class.sample")
+VlnPlot(All_Combined, "Slc12a1", split.by = "class.sample", group.by = "class.sample")
+
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.show='hide', fig.align = 'center', fig.width=12}
+
+
+DimPlot(All_Combined, reduction = "umap", label = T)
+
+DimPlot(All_Combined, reduction = "umap", group.by = "class.Merge", label = T)
+
+table(Idents(All_Combined), All_Combined$class.sample)
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.show='hide', fig.align = 'center', fig.width=16}
+
+
+DotPlot(All_Combined,
+features = markers.to.plot1,
+dot.scale = 8,
+dot.min = 0,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5,
+assay = "RNA") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  coord_flip()
+
+VlnPlot(All_Combined, "nFeature_RNA")
+
+
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.show='hide', fig.align = 'center'}
+
+SO6 <- All_Combined
+
+SO6@meta.data <- SO6@meta.data %>% 
+  mutate(clustering.All = case_when(
+    seurat_clusters == 0 ~ "PTS2",
+    seurat_clusters == 1 ~ "PTS1",
+    seurat_clusters == 2 ~ "PTS3",
+    seurat_clusters == 3 ~ "DCT1",
+    seurat_clusters == 4 ~ "PTS1",
+    seurat_clusters == 5 ~ "PTS1",
+    seurat_clusters == 6 ~ "PTS2",
+    seurat_clusters == 7 ~ "PTinj",
+    seurat_clusters == 8 ~ "PTS2",
+    seurat_clusters == 9 ~ "TAL1",
+    seurat_clusters == 10 ~ "TAL1",
+    seurat_clusters == 11 ~ "TAL1",
+    seurat_clusters == 12 ~ "FIB",
+    seurat_clusters == 13 ~ "EC",
+    seurat_clusters == 14 ~ "TAL2",
+    seurat_clusters == 15 ~ "PTinj",
+    seurat_clusters == 16 ~ "DTL",
+    seurat_clusters == 17 ~ "PTinj",
+    seurat_clusters == 18 ~ "PC",
+    seurat_clusters == 19 ~ "PC",
+    seurat_clusters == 20 ~ "EC",
+    seurat_clusters == 21 ~ "TAL1",
+    seurat_clusters == 22 ~ "CNT",
+    seurat_clusters == 23 ~ "DCT2",
+    seurat_clusters == 24 ~ "ICA",
+    seurat_clusters == 25 ~ "CNT",
+    seurat_clusters == 26 ~ "ICB",
+    seurat_clusters == 27 ~ "PTinj",
+    seurat_clusters == 28 ~ "Doublet",
+    seurat_clusters == 29 ~ "PC",
+    seurat_clusters == 30 ~ "DTL",
+    seurat_clusters == 31 ~ "TAL1",
+    seurat_clusters == 32 ~ "PTinj",
+    seurat_clusters == 33 ~ "PC",
+    seurat_clusters == 34 ~ "PTinj",
+    seurat_clusters == 35 ~ "URO",
+    seurat_clusters == 36 ~ "PTinj",
+    seurat_clusters == 37 ~ "PODO",
+    seurat_clusters == 38 ~ "IMMUNE",
+    seurat_clusters == 39 ~ "PEC",
+    seurat_clusters == 40 ~ "FIB",
+    seurat_clusters == 41 ~ "EC",
+    seurat_clusters == 42 ~ "CONTRACT",
+    seurat_clusters == 43 ~ "Doublet",
+    seurat_clusters == 44 ~ "Doublet",
+    seurat_clusters == 45 ~ "Doublet",
+    seurat_clusters == 46 ~ "Doublet",
+    TRUE ~ NA_character_  # Handle any unexpected values
+  )) 
+
+
+DimPlot(SO6, group.by = "clustering.All", label = T) + ggtitle("Subclass Annotation")
+
+```
+
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.show='hide', fig.align = 'center'}
+
+Idents(SO6) <- SO6@meta.data$clustering.All
+
+SO7 <- subset(SO6, idents = "Doublet", invert = T)
+
+DimPlot(SO7, label = T) + ggtitle("Doublets Removed")
+
+DefaultAssay(SO7) <- "integrated"
+
+SO7 <- RunPCA(SO7, verbose = F)
+SO7 <- RunUMAP(SO7, dims = 1:40, verbose = F)
+SO7 <- FindNeighbors(SO7, dims = 1:40, verbose = F)
+SO7 <- FindClusters(SO7, resolution = 2, verbose = T)
+
+DimPlot(SO7, label = T, group.by = "Sample")
+DimPlot(SO7, label = T, split.by = "class.sample")
+DimPlot(SO7, label = T, group.by = "clustering.All")
+DimPlot(SO7, label = T)
+
+head(SO7@meta.data)
+
+#All2cluster37 <- FindMarkers(SO7, ident.1 = "37", min.pct = 0.25, only.pos = TRUE)
+#All2cluster39 <- FindMarkers(SO7, ident.1 = "39", min.pct = 0.25, only.pos = TRUE)
+
+#All2cluster29 <- FindMarkers(SO7, ident.1 = "29", min.pct = 0.25, only.pos = TRUE)
+
+
+```
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.show='hide', fig.align = 'center', fig.width=16}
+
+
+DotPlot(SO7,
+features = markers.to.plot1,
+dot.scale = 8,
+dot.min = 0,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5,
+assay = "RNA") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  coord_flip()
+
+VlnPlot(All_Combined, "nFeature_RNA")
+
+
+
+```
+
+
+# ALL Final Metadata
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.align = 'center'}
+
+
+SO7[["percent.ribo"]]  <- PercentageFeatureSet(SO7, pattern = "^Rp")
+
+head(SO@meta.data)
+
+FeaturePlot(SO7, "percent.ribo")
+
+DimPlot(SO7, group.by = "seurat_clusters")
+
+SO7@meta.data <- SO7@meta.data %>% 
+  mutate(subclass.All = case_when(
+     seurat_clusters == 0 ~ "PTS2",
+    seurat_clusters == 1 ~ "PTS1",
+    seurat_clusters == 2 ~ "PTS1",
+    seurat_clusters == 3 ~ "PTS3",
+    seurat_clusters == 4 ~ "DCT1",
+    seurat_clusters == 5 ~ "PTS2",
+    seurat_clusters == 6 ~ "TAL1",
+    seurat_clusters == 7 ~ "TAL1",
+    seurat_clusters == 8 ~ "TAL1",
+    seurat_clusters == 9 ~ "PTS1",
+    seurat_clusters == 10 ~ "PTS1",
+    seurat_clusters == 11 ~ "EC",
+    seurat_clusters == 12 ~ "PC",
+    seurat_clusters == 13 ~ "FIB",
+    seurat_clusters == 14 ~ "TAL2",
+    seurat_clusters == 15 ~ "DTL",
+    seurat_clusters == 16 ~ "PTinj",
+    seurat_clusters == 17 ~ "PC",
+    seurat_clusters == 18 ~ "EC",
+    seurat_clusters == 19 ~ "PTinj",
+    seurat_clusters == 20 ~ "CNT",
+    seurat_clusters == 21 ~ "CNT",
+    seurat_clusters == 22 ~ "DCT2",
+    seurat_clusters == 23 ~ "ICA",
+    seurat_clusters == 24 ~ "PTinj",
+    seurat_clusters == 25 ~ "ICB",
+    seurat_clusters == 26 ~ "PC",
+    seurat_clusters == 27 ~ "DTL",
+    seurat_clusters == 28 ~ "PTinj",
+    seurat_clusters == 29 ~ "PTinj",
+    seurat_clusters == 30 ~ "URO",
+    seurat_clusters == 31 ~ "PTinj",
+    seurat_clusters == 32 ~ "PODO",
+    seurat_clusters == 33 ~ "IMMUNE",
+    seurat_clusters == 34 ~ "PEC",
+    seurat_clusters == 35 ~ "FIB",
+    seurat_clusters == 36 ~ "CONTRACT",
+    TRUE ~ NA_character_  # Handle any unexpected values
+  )) 
+
+SO7@meta.data$subclass.All <- factor(SO7@meta.data$subclass.All, levels = c("PTS1", "PTS2", "PTS3", "PTinj", "DTL", "TAL1", "TAL2", "DCT1", "DCT2", "CNT", "PC", "ICA", "ICB", "URO", "PEC", "FIB", "CONTRACT", "PODO", "EC", "IMMUNE"))
+
+DimPlot(SO7, label = T, group.by = "subclass.All")
+DimPlot(SO7,  group.by = "subclass.All", split.by = "Sample")
+
+SO7@meta.data <- SO7@meta.data %>% 
+  mutate(class.All = case_when(
+    seurat_clusters == 0 ~ "PT",
+    seurat_clusters == 1 ~ "PT",
+    seurat_clusters == 2 ~ "PT",
+    seurat_clusters == 3 ~ "PT",
+    seurat_clusters == 4 ~ "DCT",
+    seurat_clusters == 5 ~ "PT",
+    seurat_clusters == 6 ~ "TAL",
+    seurat_clusters == 7 ~ "TAL",
+    seurat_clusters == 8 ~ "TAL",
+    seurat_clusters == 9 ~ "PT",
+    seurat_clusters == 10 ~ "PT",
+    seurat_clusters == 11 ~ "EC",
+    seurat_clusters == 12 ~ "PC",
+    seurat_clusters == 13 ~ "FIB",
+    seurat_clusters == 14 ~ "TAL",
+    seurat_clusters == 15 ~ "DTL",
+    seurat_clusters == 16 ~ "PT",
+    seurat_clusters == 17 ~ "PC",
+    seurat_clusters == 18 ~ "EC",
+    seurat_clusters == 19 ~ "PT",
+    seurat_clusters == 20 ~ "CNT",
+    seurat_clusters == 21 ~ "CNT",
+    seurat_clusters == 22 ~ "DCT",
+    seurat_clusters == 23 ~ "ICA",
+    seurat_clusters == 24 ~ "PT",
+    seurat_clusters == 25 ~ "ICB",
+    seurat_clusters == 26 ~ "PC",
+    seurat_clusters == 27 ~ "DTL",
+    seurat_clusters == 28 ~ "PT",
+    seurat_clusters == 29 ~ "PT",
+    seurat_clusters == 30 ~ "URO",
+    seurat_clusters == 31 ~ "PT",
+    seurat_clusters == 32 ~ "PODO",
+    seurat_clusters == 33 ~ "IMMUNE",
+    seurat_clusters == 34 ~ "PEC",
+    seurat_clusters == 35 ~ "FIB",
+    seurat_clusters == 36 ~ "CONTRACT",
+    TRUE ~ NA_character_  # Handle any unexpected values
+  )) 
+
+SO7@meta.data$class.All <- factor(SO7@meta.data$class.All, levels = c("PT", "DTL", "TAL", "DCT", "CNT", "PC", "ICA", "ICB", "URO", "PEC", "FIB", "CONTRACT", "PODO", "EC", "IMMUNE"))
+
+DimPlot(SO7, label = T, group.by = "class.All")
+DimPlot(SO7,  group.by = "class.All", split.by = "Sample")
+
+SO7@meta.data <- SO7@meta.data %>% 
+  mutate(type.All = case_when(
+    seurat_clusters == 0 ~ "EPITHELIAL",
+    seurat_clusters == 1 ~ "EPITHELIAL",
+    seurat_clusters == 2 ~ "EPITHELIAL",
+    seurat_clusters == 3 ~ "EPITHELIAL",
+    seurat_clusters == 4 ~ "EPITHELIAL",
+    seurat_clusters == 5 ~ "EPITHELIAL",
+    seurat_clusters == 6 ~ "EPITHELIAL",
+    seurat_clusters == 7 ~ "EPITHELIAL",
+    seurat_clusters == 8 ~ "EPITHELIAL",
+    seurat_clusters == 9 ~ "EPITHELIAL",
+    seurat_clusters == 10 ~ "EPITHELIAL",
+    seurat_clusters == 11 ~ "ENDOTHELIAL",
+    seurat_clusters == 12 ~ "EPITHELIAL",
+    seurat_clusters == 13 ~ "STROMAL",
+    seurat_clusters == 14 ~ "EPITHELIAL",
+    seurat_clusters == 15 ~ "EPITHELIAL",
+    seurat_clusters == 16 ~ "EPITHELIAL",
+    seurat_clusters == 17 ~ "EPITHELIAL",
+    seurat_clusters == 18 ~ "ENDOTHELIAL",
+    seurat_clusters == 19 ~ "EPITHELIAL",
+    seurat_clusters == 20 ~ "EPITHELIAL",
+    seurat_clusters == 21 ~ "EPITHELIAL",
+    seurat_clusters == 22 ~ "EPITHELIAL",
+    seurat_clusters == 23 ~ "EPITHELIAL",
+    seurat_clusters == 24 ~ "EPITHELIAL",
+    seurat_clusters == 25 ~ "EPITHELIAL",
+    seurat_clusters == 26 ~ "EPITHELIAL",
+    seurat_clusters == 27 ~ "EPITHELIAL",
+    seurat_clusters == 28 ~ "EPITHELIAL",
+    seurat_clusters == 29 ~ "EPITHELIAL",
+    seurat_clusters == 30 ~ "EPITHELIAL",
+    seurat_clusters == 31 ~ "EPITHELIAL",
+    seurat_clusters == 32 ~ "EPITHELIAL",
+    seurat_clusters == 33 ~ "IMMUNE",
+    seurat_clusters == 34 ~ "EPITHELIAL",
+    seurat_clusters == 35 ~ "STROMAL",
+    seurat_clusters == 36 ~ "STROMAL",
+    TRUE ~ NA_character_  # Handle any unexpected values
+  )) 
+    
+SO7@meta.data$type.All <- factor(SO7@meta.data$type.All, levels = c("EPITHELIAL", "ENDOTHELIAL", "STROMAL", "IMMUNE"))
+
+DimPlot(SO7, label = T, group.by = "type.All")
+DimPlot(SO7,  group.by = "type.All", split.by = "Sample")
+
+#saveRDS(SO7, here("Output", "ALL_integrated.rds")) #Change
+
+DimPlot(SO7, label = T, group.by = "class.sample")
+
+```
+
+# Prop Tables
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, results = FALSE, message=FALSE, fig.show='hide', fig.align = 'center'}
+
+t1 <- table(SO7@meta.data$subclass.All, SO7@meta.data$class.sample)[, c("CACPR Sham", "CACPR", "IRI Sham", "IRI")]
+t1
+
+prop.t1 <- prop.table(t1, margin = 2) 
+prop.t1
+
+t2 <- as.data.frame(t1)
+colnames(t2) <- c('Cell_type', 'Experimental_Group', 'Frequency')
+
+# Original plot
+
+ggplot(t2, aes(fill=Cell_type, y=Frequency, x=Experimental_Group)) + 
+  geom_bar(position="fill", stat = "identity", fun.y = "mean", colour="black") +
+  theme_classic()
+
+
+t1 <- table(SO7@meta.data$class.All, SO7@meta.data$class.sample)[, c("CACPR Sham", "CACPR", "IRI Sham", "IRI")]
+t1
+
+prop.t1 <- prop.table(t1, margin = 2) 
+prop.t1
+
+t2 <- as.data.frame(t1)
+colnames(t2) <- c('Cell_type', 'Experimental_Group', 'Frequency')
+
+# Original plot
+
+ggplot(t2, aes(fill=Cell_type, y=Frequency, x=Experimental_Group)) + 
+  geom_bar(position="fill", stat = "identity", fun.y = "mean", colour="black") +
+  theme_classic()
+
+
+
+t1 <- table(SO7@meta.data$type.All, SO7@meta.data$class.sample)[, c("CACPR Sham", "CACPR", "IRI Sham", "IRI")]
+t1
+
+prop.t1 <- prop.table(t1, margin = 2) 
+prop.t1
+
+t2 <- as.data.frame(t1)
+colnames(t2) <- c('Cell_type', 'Experimental_Group', 'Frequency')
+
+# Original plot
+
+ggplot(t2, aes(fill=Cell_type, y=Frequency, x=Experimental_Group)) + 
+  geom_bar(position="fill", stat = "identity", fun.y = "mean", colour="black") +
+  theme_classic()
+
+
+VlnPlot(SO7, "nFeature_RNA", group.by = "class.sample", pt.size = 0)
+
+
+```
+
+
+# Session Info
+
+```{r echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.align = 'center'}
+
+sessionInfo()
+```
